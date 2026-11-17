@@ -135,6 +135,7 @@ export function startChat(ctx: ChatContext): void {
   ctx.transcript.addChild(new Text(
     pc.dim(
       "Type / for the command list (Tab completes it, /help prints it) · /config changes provider, model, set or session · Ctrl+P config · Ctrl+O model · Ctrl+E $EDITOR" +
+        " · Enter sends; Ctrl+J adds a line (Shift+Enter where the terminal reports it, \\ then Enter anywhere)" +
         (ctx.steeringEnabled ? " · Enter during a turn adds to that turn, Esc cancels it" : ""),
     ),
     1, 0,
