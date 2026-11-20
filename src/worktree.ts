@@ -15,7 +15,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { resolve, join, dirname, basename, sep } from "node:path";
-import pc from "picocolors";
+import pc from "./theme";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

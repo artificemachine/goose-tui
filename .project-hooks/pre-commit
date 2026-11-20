@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Project-specific pre-commit hook: runs AFTER global ~/.githooks/pre-commit checks pass.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# ── Doctrine guard ────────────────────────────────────────────────────────────
+GUARD="$REPO_ROOT/tests/doctrine/doctrine-guard.sh"
+
+if [ ! -f "$GUARD" ]; then
+  echo "[pre-commit] ERROR: doctrine guard not found at tests/doctrine/doctrine-guard.sh" >&2
+  exit 1
+fi
+
+bash "$GUARD"
+
+# ── Register freshness ───────────────────────────────────────────────────────
+# Warns on every commit, blocks only when the commit can invalidate the register.
+# An unrelated hotfix must never be held hostage by a stale inventory: that is
+# how a gate gets disabled inside a week. Exit 2 (cannot evaluate) never blocks
+# a commit either -- it is reported, because a check that cannot measure must
+# not pretend to have passed. The script is a no-op in a repo with no register.
+FRESHNESS="$REPO_ROOT/tests/register/register-freshness.sh"
+
+if [ -f "$FRESHNESS" ]; then
+  FRESHNESS_RC=0
+  FRESHNESS_OUT="$(bash "$FRESHNESS" 2>&1)" || FRESHNESS_RC=$?
+
+  if [ "$FRESHNESS_RC" = 1 ]; then
+    STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+    if echo "$STAGED" | grep -qE '^(docs/|RULES.md$|SPEC|AGENTS.md$|CLAUDE.md$)' || echo "$STAGED" | grep -qE 'PLAN-.*\.md$'; then
+      echo "$FRESHNESS_OUT" | sed 's/^/[pre-commit] /' >&2
+      echo "[pre-commit] BLOCKED: this commit touches what the register enumerates (docs/, RULES.md, a SPEC, a plan)." >&2
+      echo "[pre-commit] Refresh it first, commit the refresh, then commit this change." >&2
+      exit 1
+    fi
+    echo "[pre-commit] NOTE: the register is stale, but this commit touches nothing it enumerates. Not blocking." >&2
+    echo "[pre-commit] Refresh when convenient: /register <programme> --from-register docs/REGISTER-*.md" >&2
+  elif [ "$FRESHNESS_RC" = 2 ]; then
+    echo "$FRESHNESS_OUT" | sed 's/^/[pre-commit] /' >&2
+    echo "[pre-commit] NOTE: register freshness could not be fully evaluated (see above). Not blocking." >&2
+  fi
+fi
+

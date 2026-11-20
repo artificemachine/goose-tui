@@ -10,7 +10,7 @@
 import process from "node:process";
 import { resolve } from "node:path";
 import { autocomplete, confirm, isCancel, log, outro, text } from "@clack/prompts";
-import pc from "picocolors";
+import pc from "./theme";
 
 import { env, generateSessionName, formatNumber } from "./utils";
 import { listSessionSets } from "./rossii-config";

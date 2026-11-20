@@ -1,3 +1,5 @@
+Read `COMMON.md` in this same directory first: it carries the safety rules and points to `RULES.md`.
+
 # rossii — Agent Context
 
 > **⚠ Tested only on Linux.** May work on macOS. Windows is not supported.
@@ -281,7 +283,7 @@ warns in the TUI and keeps the ACP default.
     empty text: clearing it with `mode: "set"` + empty text wiped the prompt that had
     just been applied (3.5.2 and earlier — the set's prompt never reached the agent)
 - **Slash commands** — rossii answers its own (`/config`, `/model`, `/provider`, `/set`,
-  `/session`, `/rename`, `/fork`, `/think`, `/tool`, `/timeout`, `/edit`, `/fetch`, `/help`) and sends
+  `/session`, `/rename`, `/fork`, `/think`, `/tool`, `/timeout`, `/edit`, `/fetch`, `/theme`, `/exit`, `/help`) and sends
   **everything else that starts with `/` to the agent as a plain prompt**, so goose's own
   commands work: `/compact`, `/clear`, `/status`, `/doctor`, `/goal`, `/grind`, `/prompts`,
   `/prompt`, `/skills` and the slash commands goose builds from recipes and skills (see
@@ -377,10 +379,10 @@ warns in the TUI and keeps the ACP default.
   queued (parallel tool calls); Esc/Ctrl+C during a turn sends `session/cancel`, while
   the overlay is open they belong to the list (reject that tool call). Pending requests
   are resolved as `cancelled` on turn end, agent exit and shutdown
-- Esc exits when the prompt is empty; with a non-empty draft it *arms* the exit (a hint
-  is printed, the second Esc exits — the editor itself does not handle Esc); with the
+- Esc never exits: it cancels the running turn (`session/cancel`), and with no turn running it
+  does nothing but print a one-time `Esc cancels a running turn · Ctrl+C exits` hint. With the
   autocomplete menu open Esc stays with the editor, which closes the menu. Ctrl+C exits
-  unconditionally. An **open overlay owns Esc** (`tui.hasOverlay()` in the input listener):
+  unconditionally, and `/exit` (alias `/quit`) closes the chat from the composer. An **open overlay owns Esc** (`tui.hasOverlay()` in the input listener):
   it closes the menu / rejects the permission prompt instead of quitting the chat — the
   listener used to intercept it and exit with the dialog still on screen
 - If `goose acp` dies, the chat stops accepting prompts and Esc exits; `send()` refuses

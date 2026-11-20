@@ -7,7 +7,7 @@
  * toggleAllThoughts, toggleAllTools.
  */
 
-import pc from "picocolors";
+import pc from "../theme";
 import { Container, Text, Markdown } from "@earendil-works/pi-tui";
 import { activeRunIdFromMeta, queuedSteerIdFromMeta, steerChunkId } from "./steer";
 import { ThoughtBlock } from "./thought";
@@ -17,7 +17,8 @@ import { parseToolCommand } from "./tool-call-block";
 import { toolCallPayload, toolDetailFromRawInput } from "./tool-call-content";
 import { parseAvailableCommands } from "./slash-commands";
 import { beginTurn } from "./turn-separator";
-import { answerLabel, formatCost, markdownTheme } from "./chat-context";
+import { answerLabel, formatCost, markdownTheme, userMessageLine } from "./chat-context";
+import { SectionBand } from "./section-band";
 import type { ChatContext } from "./chat-context";
 import type { SessionNotification } from "./types";
 
@@ -217,7 +218,7 @@ export function renderHeader(ctx: ChatContext): void {
   const title = ctx.sessionTitle ? `  ${pc.dim(`· ${ctx.sessionTitle}`)}` : "";
   const setText = ctx.currentSetLabel ? `  ${pc.dim(`· set: ${ctx.currentSetLabel}`)}` : "";
   ctx.headerLine.setText(
-    `${pc.green("🪿 rossii chat")}  ${pc.dim(`${ctx.currentProvider}/${ctx.currentModel}  ${ctx.cwd}`)}${title}${setText}`,
+    `${pc.green("🪿 goose-tui chat")}  ${pc.dim(`${ctx.currentProvider}/${ctx.currentModel}  ${ctx.cwd}`)}${title}${setText}`,
   );
   ctx.tui.requestRender();
 }
@@ -259,7 +260,7 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
           container.addChild(ctx.answerLabelLine);
           ctx.currentMd = new Markdown("", 1, 0, markdownTheme);
           container.addChild(ctx.currentMd);
-          ctx.transcript.addChild(container);
+          ctx.transcript.addChild(new SectionBand(container));
           ctx.answerChars = 0;
         }
         ctx.streamBuffer += text;
@@ -295,7 +296,7 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
           // a resumed conversation exactly as it did live. A steer (`sId`) is
           // part of the turn it was sent into, not a new one.
           if (!sId) beginTurn(ctx);
-          ctx.userLine = new Text("", 1, 0);
+          ctx.userLine = userMessageLine("");
           ctx.transcript.addChild(ctx.userLine);
           ctx.userBuffer = "";
           ctx.userMessageId = messageId;
@@ -317,7 +318,7 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
             // `ROSSII_ACP_BLOCKS`: live / open / done / closed.
             mode: ctx.blockMode,
           });
-          ctx.transcript.addChild(ctx.currentThought);
+          ctx.transcript.addChild(new SectionBand(ctx.currentThought));
         }
         ctx.currentThought.append(update.content.text);
         flushThought(ctx);
@@ -348,6 +349,7 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
         ctx.transcript.addChild(block);
       }
       block.setTitle(title);
+      block.setKind(update.kind);
       block.setStatus(status);
       // The full command: goose truncates its own title to 57 characters.
       block.setDetail(toolDetailFromRawInput(update.rawInput));

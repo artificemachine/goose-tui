@@ -5,7 +5,7 @@
  * the same mutable state without closures.
  */
 
-import pc from "picocolors";
+import pc, { getTheme } from "../theme";
 
 import { env, formatCharCount } from "../utils";
 
@@ -14,7 +14,7 @@ import type {
   RequestPermissionResponse,
   SessionConfigOption,
 } from "./types";
-import type { Container, Editor, Loader, Markdown, Text, TUI } from "@earendil-works/pi-tui";
+import { Text, type Container, type Editor, type Loader, type Markdown, type TUI } from "@earendil-works/pi-tui";
 import type { AcpClient } from "./client";
 import type { SessionSet } from "../rossii-config";
 import { DEFAULT_PROFILE_SENTINEL } from "../rossii-config";
@@ -187,6 +187,13 @@ export function formatCost(cost: any): string {
   return currency.toUpperCase() === "USD" ? ` · $${amount}` : ` · ${amount} ${currency}`;
 }
 
+export function userMessageLine(text: string): Text {
+  const background = getTheme() === "retrowave" && pc.isColorSupported
+    ? (line: string) => `\x1b[48;2;20;20;20m${line.replace(/\x1b\[(?:0|49)?m/g, (reset) => `${reset}\x1b[48;2;20;20;20m`)}\x1b[49m`
+    : undefined;
+  return new Text(text, 1, 0, background);
+}
+
 /**
  * Header of a streaming answer. The character count mirrors the thought bar
  * (`💭 Thought · N chars`), so both live blocks report their size the same way —
@@ -275,7 +282,7 @@ export interface ChatContext {
   /** The armed idle watchdog (`startIdleWatchdog`), cleared by shutdown. */
   idleTimer: ReturnType<typeof setInterval> | null;
   lastAgentActivity: number;
-  escArmedExit: boolean;
+  /** The one-time "Ctrl+C exits" hint has been printed. */
   exitHintShown: boolean;
   menuActive: boolean;
 
@@ -417,7 +424,6 @@ export function createChatContext(opts: AcpChatOptions): ChatContext {
     turnTimeout: timeouts.turn,
     idleTimer: null,
     lastAgentActivity: 0,
-    escArmedExit: false,
     exitHintShown: false,
     menuActive: false,
 

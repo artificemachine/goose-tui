@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# goose-tui — start the chat from any directory, including a herdr pane.
+#
+# The script resolves its own location (following symlinks), so a link such as
+# $HOME/.local/bin/goose-tui → <checkout>/bin/goose-tui keeps working from anywhere.
+#
+#   goose-tui            # the wizard / chat, exactly like `bun start`
+#   goose-tui doctor     # diagnostics
+#   goose-tui web        # browser surface
+#   goose-tui --help     # flags and environment
+#
+# GOOSE_TUI_ROOT overrides the checkout the launcher runs from.
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  TARGET="$(readlink "$SOURCE")"
+  case "$TARGET" in
+    /*) SOURCE="$TARGET" ;;
+    *) SOURCE="$(dirname "$SOURCE")/$TARGET" ;;
+  esac
+done
+ROOT="$(cd "$(dirname "$SOURCE")/.." && pwd)"
+if [ -n "${GOOSE_TUI_ROOT:-}" ]; then
+  ROOT="$GOOSE_TUI_ROOT"
+fi
+
+ENTRY="$ROOT/src/index.ts"
+if [ ! -f "$ENTRY" ]; then
+  echo "goose-tui: no src/index.ts under $ROOT" >&2
+  echo "  set GOOSE_TUI_ROOT to the checkout, or rebuild the link:" >&2
+  echo "  ln -sf <checkout>/bin/goose-tui \$HOME/.local/bin/goose-tui" >&2
+  exit 1
+fi
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "goose-tui: bun is not on PATH (install Bun: https://bun.sh)" >&2
+  exit 1
+fi
+
+exec bun "$ENTRY" "$@"

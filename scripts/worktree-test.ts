@@ -17,7 +17,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,7 +36,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 // ─── Fixture ─────────────────────────────────────────────────────────────────
 
-const root = mkdtempSync(join(tmpdir(), "rossii-worktree-"));
+// Resolved: on macOS the temp directory is a symlink (/var → /private/var), and
+// git reports the resolved path, so the expected paths must start from it too.
+const root = realpathSync(mkdtempSync(join(tmpdir(), "rossii-worktree-")));
 // A space in the repo path is the point: argv-based git calls must survive it.
 const repo = join(root, "repo with spaces");
 const ORIGINAL_CWD = process.cwd();
@@ -57,6 +59,9 @@ function setUpRepo(): void {
   execFileSync("git", ["init", "-q", "-b", "main", repo], { stdio: "ignore" });
   git(["config", "user.email", "test@example.com"]);
   git(["config", "user.name", "rossii test"]);
+  // The fixture must not run the host's hooks: a machine-wide `core.hooksPath`
+  // (a guard that refuses commits on `main`, say) would fail the setup below.
+  git(["config", "core.hooksPath", join(repo, ".git", "no-hooks")]);
   writeFileSync(join(repo, "README.md"), "hello\n");
   git(["add", "."]);
   git(["commit", "-qm", "init"]);

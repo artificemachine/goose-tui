@@ -59,6 +59,13 @@ const namesFor = (text: string): string[] =>
 
 // ─── The list ───────────────────────────────────────────────────────────────
 
+ok("the chat offers /exit and lists it once", () => {
+  const names = CHAT_COMMANDS.map((item) => item.value);
+  assert.ok(names.includes("exit"), "/exit closes the chat without Ctrl+C");
+  assert.equal(names.filter((name) => name === "exit").length, 1, "listed once");
+  assert.ok(!names.includes("quit"), "quit is an alias, not a second entry");
+});
+
 ok("the chat's commands come first, goose's follow", () => {
   assert.equal(ITEMS[0].value, "config");
   assert.deepEqual(

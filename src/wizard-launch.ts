@@ -8,7 +8,7 @@
 
 import { resolve } from "node:path";
 import { confirm, isCancel, log, outro } from "@clack/prompts";
-import pc from "picocolors";
+import pc from "./theme";
 
 import { generateSessionName } from "./utils";
 import { listSessionSets } from "./rossii-config";

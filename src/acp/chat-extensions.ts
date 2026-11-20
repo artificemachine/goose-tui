@@ -6,7 +6,7 @@
  * verifySessionExtensions, reconcileSessionExtensions, applySystemPrompt.
  */
 
-import pc from "picocolors";
+import pc from "../theme";
 import { Text } from "@earendil-works/pi-tui";
 
 import {

@@ -16,7 +16,8 @@
  * once the block is expanded.
  */
 
-import pc from "picocolors";
+import pc from "../theme";
+import { bandLines, bandsEnabled, BLACK_BAND_BG, BLACK_BAND_GUTTER, TOOL_BAND_BG, TOOL_BAND_GUTTER } from "./section-band";
 
 import {
   Markdown,
@@ -167,6 +168,7 @@ export class ToolCallBlock implements Component {
   private md: Markdown | null = null;
 
   private _title = "";
+  private _kind?: string;
   private _status: string = "";
   /** Full command / path from the call's raw arguments, when goose sent them. */
   private _detail?: string;
@@ -184,6 +186,10 @@ export class ToolCallBlock implements Component {
   /** Set the tool title (`shell · <truncated command>`). */
   setTitle(title: string): void {
     this._title = title;
+  }
+
+  setKind(kind: string | undefined): void {
+    if (kind !== undefined) this._kind = kind;
   }
 
   /** Set the tool status (pending / in_progress / completed / failed). */
@@ -298,7 +304,15 @@ export class ToolCallBlock implements Component {
     if (this.expanded && this.md) {
       lines.push(...this.md.render(bodyWidth).map((line) => `${" ".repeat(DETAIL_INDENT)}${line}`));
     }
-    return lines.map((line) => margin + line);
+    return lines.map((line) => {
+      if (!bandsEnabled()) return margin + line;
+      const kind = !this._kind || this._kind === "other" ? this.toolName().toLowerCase() : this._kind;
+      const isShell = kind === "execute" || kind === "shell";
+      // Three families, so a glance separates them: shell calls take the black
+      // band, the other tool calls the blue one, and answers/thoughts the green
+      // one — a tool section never reads as an answer.
+      return bandLines([line], width, isShell ? BLACK_BAND_BG : TOOL_BAND_BG, isShell ? BLACK_BAND_GUTTER : TOOL_BAND_GUTTER)[0]!;
+    });
   }
 
   /**

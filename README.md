@@ -1,28 +1,52 @@
-# rossii — an ACP terminal UI for Goose
+# goose-tui — an ACP terminal UI for Goose
 
-**rossii** is a full terminal user interface for [Goose](https://github.com/block/goose). It speaks
+**goose-tui** is a full terminal user interface for [Goose](https://github.com/block/goose). It speaks
 the **Agent Client Protocol (ACP)** to `goose acp` and renders the conversation itself — streaming
 answers, thinking, tool calls, permission prompts, tokens and cost — while keeping the workflow
 around it: per-project memory, session sets, worktrees, provider/model switching and model
 discovery.
 
-It is not a wrapper that types `goose session` for you anymore. The chat *is* rossii; the classic
+It is not a wrapper that types `goose session` for you anymore. The chat *is* goose-tui; the classic
 Goose TUI is an opt-in fallback (`ROSSII_ACP_MODE=classic`).
+
+## Fork of rossii
+
+This project is a fork of **[rossii](https://github.com/viorn/rossii)** by Vyuyukin (Vladimir Y.),
+released under the MIT licence — the same licence this fork keeps, with the original copyright notice
+intact in [`LICENSE`](LICENSE). The engine, the ACP client, the wizard and the session-set model come
+from that work; everything below in [What this fork adds](#what-this-fork-adds) is ours.
+
+The **name of the command, the data paths and the environment variables stay `rossii`** on purpose:
+`~/.config/rossii`, the `ROSSII_*` variables and `git merge upstream/main` all keep working, so this
+fork can take fixes from upstream instead of drifting away from it.
+
+## What this fork adds
+
+- **Retrowave theme** (`/theme retrowave`) with coloured section bands: agent prose on green, tool
+  calls on blue, shell and your own messages on black.
+- **Esc cancels, never quits** — Ctrl+C still exits, and `/exit` closes the chat from the composer.
+- **`goose-tui web`** — the same ACP session served to a browser over SSE, at `http://127.0.0.1:8787`
+  by default.
+- **Error journal** — every reported failure also lands in `~/.local/state/rossii/errors.jsonl`
+  (or `$ROSSII_STATE_DIR`), secrets redacted, with one counted report per distinct failure under
+  `reports/`.
+- **Pi skills visible to Goose** — the canonical skill pack rendered for Goose's discovery roots.
 
 > **⚠ Tested only on Linux.** May work on macOS (no `secret-tool`, file-based secrets work). Windows is not supported.
 >
 > Requires a Goose build with the `acp` subcommand — verified on **1.50.0** and **1.57.0**.
-
-> **Renamed in 3.0.0.** The project was called **cgoose** up to 2.4.0 — *Anser rossii*, Ross's goose, is
-> the smallest goose there is (the old name and docs are kept in [`docs/legacy-classic.md`](docs/legacy-classic.md)).
-> Settings are read from `~/.config/rossii`, falling back to the old `~/.config/cgoose`, and the
-> `ROSSII_*` environment variables still honour their `CGOOSE_*` spellings.
+>
+> **Renamed twice.** The upstream project was called **cgoose** up to 2.4.0, then **rossii** — *Anser
+> rossii*, Ross's goose, is the smallest goose there is (the old name and docs are kept in
+> [`docs/legacy-classic.md`](docs/legacy-classic.md)). This fork displays itself as **goose-tui** and
+> keeps the `rossii` command, `~/.config/rossii` and the `ROSSII_*` variables so existing settings and
+> upstream merges keep working.
 
 ---
 
 ## Demo — the chat
 
-![rossii chat](chat.gif)
+![goose-tui chat](chat.gif)
 
 Live configuration from inside the running chat — the `/config` dialog, the model list with its
 context limits (here **Fetch models from API** pulled 712 models from the provider), and a prompt
@@ -32,10 +56,10 @@ answered without leaving the session.
 
 ## Demo — the wizard
 
-![rossii workflow](flow.gif)
+![goose-tui workflow](flow.gif)
 
 The wizard is still there — it collects the session, set, provider and model — but it now opens
-straight into rossii's own chat.
+straight into goose-tui's own chat.
 
 ---
 
@@ -49,23 +73,29 @@ straight into rossii's own chat.
 
 ---
 
-## Why rossii?
+## Why goose-tui?
 
 Goose's CLI works, but every session raises the same questions: which provider did I use in this
 project, with which model, under which name, with which system prompt and extensions? And once the
 session is running, changing any of that means restarting it.
 
-**rossii remembers** — and lets you change the answer *while the session runs*:
+**goose-tui remembers** — and lets you change the answer *while the session runs*:
 
 - per-project history of sessions, providers, models and sets;
 - a chat UI built for long turns: streaming, tool calls, permissions, scrollback, watchdogs;
 - live reconfiguration — switch provider, model, session set or session without losing the conversation;
-- the same Goose data (`config.yaml`, `custom_providers/`, `sessions.db`), so `goose` and rossii see
+- the same Goose data (`config.yaml`, `custom_providers/`, `sessions.db`), so `goose` and goose-tui see
   the same sessions.
 
 ---
 
 ## Installation
+
+> **These commands install upstream rossii, not this fork.** `viorn/rossii` publishes the releases and
+> the installers, so the binary you get is named `rossii` and the command you type is `rossii` — the
+> fork only changes what the program calls itself on screen. Building from this checkout (`bash
+> build.sh`, then `./rossii`) is the way to run the fork today; a release pipeline of its own is not
+> set up yet.
 
 ### Option 1: One-liner — the latest release (no runtime needed)
 
@@ -123,7 +153,7 @@ the rest.
 
 ## The chat
 
-rossii spawns `goose acp` and drives it as an ACP client. One command resumes a session, picks the
+goose-tui spawns `goose acp` and drives it as an ACP client. One command resumes a session, picks the
 set/provider/model from the project's history, and keeps everything changeable from inside the chat.
 
 - **Streaming** — assistant text is rendered as it arrives under an `❮ Answer · N chars`
@@ -212,7 +242,9 @@ The menu is a shortcut for typing, not a filter: type the commands out in full a
 | `/think [expand\|collapse] [all]` | Expand/collapse thinking blocks (bare `/think` toggles the last one) |
 | `/tool [toggle\|expand\|collapse] [all]` | Expand/collapse tool call blocks (bare `/tool` toggles the last one, `all` covers the conversation) |
 | `/timeout [30m\|reset]` · `/timeout tool 1h` | Watchdog values: idle (default target) or the tool guard; saved for this directory |
+| `/theme [name]` | Colour theme: `default`, `goose`, `opencode`, `retrowave`, `dracula`, `nord`, `light`; saved in `~/.config/rossii/theme`. Needs a 24-bit colour terminal; earlier text keeps its colours |
 | `/settings` (alias of `/config`) | Same menu as `/config` |
+| `/exit` (alias `/quit`) | Close the chat — Esc never quits, it cancels the running turn; Ctrl+C also exits |
 | `/help` | List the commands — the chat's and goose's |
 
 Anything else that starts with `/` belongs to **goose** and is sent to the agent as an ordinary
@@ -307,7 +339,7 @@ stdioExtensions: ["mcpls --trust-project-config"]     # ad-hoc stdio commands
 
 | Choice | Result |
 |--------|--------|
-| **None** | A session with no extensions at all (`--no-profile` in classic mode, an empty `enabledExtensions` list in chat mode). Some Goose builds add their own `developer`; rossii tolerates it and never adds or removes it. |
+| **None** | A session with no extensions at all (`--no-profile` in classic mode, an empty `enabledExtensions` list in chat mode). Some Goose builds add their own `developer`; goose-tui tolerates it and never adds or removes it. |
 | **Default** | Leave the profile alone — every extension enabled in `~/.config/goose/config.yaml` loads. |
 | **&lt;set&gt;** | Exactly what the set lists, nothing else. |
 
@@ -318,7 +350,7 @@ change — there is no per-project snapshot.
 
 **Why not recipes?** Recipes run through `goose run --recipe`, which creates a one-shot session with
 no resume. Installed recipes are still discovered (`goose recipe list --format json`) and shown in
-the wizard, but a set is what rossii launches.
+the wizard, but a set is what goose-tui launches.
 
 ---
 
@@ -388,7 +420,7 @@ ROSSII_ACP_MODE=classic rossii n   # hand the terminal to the classic `goose ses
 
 New sessions can run in a dedicated worktree at `<repo>/.worktree/<name>` on a matching branch:
 
-- resume detects the existing worktree and continues there, even when rossii is started from
+- resume detects the existing worktree and continues there, even when goose-tui is started from
   inside `<repo>/.worktree/<name>` (the main repo root is resolved, no nested worktrees);
 - deleting a session removes the worktree; the branch is deleted only when all of its commits are
   already in the main checkout, so an unmerged branch is kept and named in the output;
@@ -419,9 +451,9 @@ read-only with Bun's built-in SQLite; no `sqlite3` binary is required.
 
 ## Requirements and compatibility
 
-- **Goose** with the `acp` subcommand. Without it, rossii prints a warning and falls back to the
+- **Goose** with the `acp` subcommand. Without it, goose-tui prints a warning and falls back to the
   classic `goose session` TUI.
-- The `_goose/unstable/*` requests rossii uses (system prompt, extension add/remove/list, rename)
+- The `_goose/unstable/*` requests goose-tui uses (system prompt, extension add/remove/list, rename)
   degrade into chat warnings on builds that lack them, so an older Goose still works with the
   features it has.
 - **Bun** ≥ 1.x to run from source or build the binary. No `sqlite3` CLI is needed — sessions are
@@ -429,7 +461,7 @@ read-only with Bun's built-in SQLite; no `sqlite3` binary is required.
 - Linux; macOS may work; Windows is unsupported.
 
 The **release binary** is a Bun standalone executable: x86_64, linked against the system glibc,
-with the whole Bun runtime embedded. That runtime is the artifact — rossii's own code is ~0.9 MB
+with the whole Bun runtime embedded. That runtime is the artifact — goose-tui's own code is ~0.9 MB
 of it — so the file's size follows the Bun that compiled it (83.4 MB for Bun 1.4.0, 105 MB for
 1.4.4). It asks for the standard loader `/lib64/ld-linux-x86-64.so.2` and needs nothing beyond
 glibc's own `libc`, `libm`, `libdl` and `libpthread`; its highest required symbol version is
@@ -459,7 +491,7 @@ but the one that built them.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `ROSSII_ACP_MODE` | `acp` | `classic` hands the terminal to `goose session` instead of rossii's chat |
+| `ROSSII_ACP_MODE` | `acp` | `classic` hands the terminal to `goose session` instead of goose-tui's chat |
 | `ROSSII_ACP_IDLE_TIMEOUT_MS` | `300000` | cancel a turn when the agent sends nothing for this long (`0` disables); beats `/timeout` and the saved value |
 | `ROSSII_ACP_TOOL_TIMEOUT_MS` | `1800000` | the same while a tool call is still running (`0` = only the 4-hour cap) |
 | `ROSSII_ACP_PROMPT_TIMEOUT_MS` | `14400000` | absolute cap on a single turn (`0` disables) |
@@ -469,14 +501,14 @@ but the one that built them.
 | `ROSSII_NO_WORKTREE` | set by default | `1` skips worktree creation |
 | `ROSSII_FORCE_WORKTREE` | unset | `1` forces worktrees (overrides the above) |
 | `ROSSII_DEBUG` | unset | `1` echoes `goose acp` stderr and the launch command |
-| `GOOSE_PATH_ROOT` | `~/.local/share/goose` | where rossii looks for `sessions/sessions.db` (Goose honours the same variable) |
+| `GOOSE_PATH_ROOT` | `~/.local/share/goose` | where goose-tui looks for `sessions/sessions.db` (Goose honours the same variable) |
 
 ---
 
 ## How it works
 
 ```
-rossii (Bun + pi-tui) ── stdio JSON-RPC 2.0 ──> goose acp
+goose-tui (Bun + pi-tui) ── stdio JSON-RPC 2.0 ──> goose acp
         │                                           │
         │  initialize / session/new | session/load   │
         │  session/prompt ⇄ session/update           │
@@ -567,6 +599,17 @@ including a comparison of what it could and could not do:
 
 The classic path still exists in the code: `ROSSII_ACP_MODE=classic` hands the terminal to
 `goose session` with the same session sets, worktrees and per-project history.
+
+---
+
+## Credits
+
+The `/theme` palettes reuse colour values (no code) from:
+
+- **Dracula** — https://draculatheme.com, MIT — the `dracula` palette.
+- **Nord** — https://www.nordtheme.com, MIT — the `nord` palette.
+- **opencode** — https://github.com/sst/opencode, MIT — an approximation of its default dark palette (`opencode`).
+- **goose** — https://github.com/aaif-goose/goose, Apache-2.0 — the colours of its former TypeScript TUI (`goose`) and the Retrowave palette from [PR #5831](https://github.com/aaif-goose/goose/pull/5831).
 
 ---
 

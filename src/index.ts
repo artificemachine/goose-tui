@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * rossii — an ACP terminal UI for Goose
+ * goose-tui — an ACP terminal UI for Goose (fork of rossii)
  *
  * CLI flags (single-letter, like tmux):
  *   e    Edit mode: choose a session → choose a user message → rollback
@@ -21,7 +21,7 @@
  *   me   Edit mode without git worktree isolation
  *   we   Edit mode with worktree forced on
  *
- * Chat (ACP) mode is the default: rossii renders the dialog itself on top of
+ * Chat (ACP) mode is the default: goose-tui renders the dialog itself on top of
  * `goose acp`. Set ROSSII_ACP_MODE=classic to hand the terminal to the classic
  * `goose session` TUI instead. The old chat letters (c, ac/ca, nc/cn, sc/cs,
  * mc, wc) are no longer flags; the pairs still work as aliases of a/n/s/m/w.
@@ -32,11 +32,12 @@
 import process from "node:process";
 import { resolve } from "node:path";
 import { intro, log } from "@clack/prompts";
-import pc from "picocolors";
+import pc, { loadSavedTheme } from "./theme";
 
 import pkg from "../package.json";
 import { setEnv, getCurrentDirName } from "./utils";
-import { readRossiiConfig } from "./rossii-config";
+import { readRossiiConfig, getRossiiPaths } from "./rossii-config";
+import { journalError } from "./journal";
 import { getConfigProviders, getDiscoveredCustomProviders, loadConfigEnvVars } from "./config";
 import { detectOllama } from "./models";
 import { runDoctor } from "./doctor";
@@ -52,14 +53,15 @@ import { resolveLaunchMode, stepLaunch } from "./wizard-launch";
 // ─── Main TUI ────────────────────────────────────────────────────────────────
 
 const HELP = `
-rossii ${pkg.version} — an ACP terminal UI for Goose
+goose-tui ${pkg.version} — an ACP terminal UI for Goose (fork of rossii)
 
 Usage:
-  rossii [flags]        open the wizard (chat mode by default)
-  rossii doctor         print a diagnostic report
-  rossii update         install the latest release (--check, --pre, --version)
-  rossii --version      print the version
-  rossii --help         print this help
+  goose-tui [flags]        open the wizard (chat mode by default)
+  goose-tui doctor         print a diagnostic report
+  goose-tui web [--port N] [--host H] serve the same chat to a browser
+  goose-tui update         install the latest release (--check, --pre, --version)
+  goose-tui --version      print the version
+  goose-tui --help         print this help
 
 Flags (single letters, tmux style; leading dashes optional):
   a   resume the last session in this directory
@@ -85,7 +87,7 @@ Environment (the legacy CGOOSE_* spelling still works):
   ROSSII_FORCE_WORKTREE=1       always create worktrees
 
 Sessions live in goose's own DB; sets, config and per-project history live in
-~/.config/rossii. Run \`rossii doctor\` when something does not work.
+~/.config/rossii (kept at the original path so existing sets and history survive the fork). Run \`goose-tui doctor\` when something does not work.
 `;
 
 function printHelp(): void {
@@ -93,6 +95,9 @@ function printHelp(): void {
 }
 
 async function main() {
+  // The saved `/theme` colours everything below, the wizard included.
+  loadSavedTheme(getRossiiPaths().configDir);
+
   // Plain-word commands and long flags are handled before the TUI starts, so
   // they work without a provider, a config or a terminal.
   const rawArgs = process.argv.slice(2);
@@ -111,9 +116,14 @@ async function main() {
   if (command === "update") {
     process.exit(await runUpdate(rawArgs.slice(1)));
   }
+  if (command === "web") {
+    // Imported here so a wizard run never loads the browser surface.
+    const { runWeb } = await import("./web/main");
+    process.exit(await runWeb(rawArgs.slice(1)));
+  }
 
   console.clear();
-  intro(`${pc.bgCyan(pc.black(" rossii "))} ${pc.dim("— an ACP terminal UI for Goose")}`);
+  intro(`${pc.bgCyan(pc.black(" goose-tui "))} ${pc.dim("— an ACP terminal UI for Goose")}`);
 
   const projectName = getCurrentDirName();
   const sessionPrefix = projectName;
@@ -222,8 +232,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+/** A failure nothing handled: journal it, say so, and exit non-zero. */
+function fatal(err: unknown): never {
+  journalError("fatal", err);
   console.error(pc.red("\n✖ Fatal error:"), err);
   process.exit(1);
-});
+}
+
+process.on("uncaughtException", fatal);
+process.on("unhandledRejection", fatal);
+main().catch(fatal);
 
