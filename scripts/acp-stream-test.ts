@@ -17,7 +17,9 @@
 import assert from "node:assert/strict";
 import { Container } from "@earendil-works/pi-tui";
 
+import { setTheme } from "../src/theme.ts";
 import { closeMessage, flushStream, handleSessionUpdate, hasVisibleAnswerText } from "../src/acp/chat-stream.ts";
+import { SectionBand } from "../src/acp/section-band.ts";
 import type { ChatContext } from "../src/acp/chat-context.ts";
 import type { SessionNotification } from "../src/acp/types.ts";
 
@@ -159,9 +161,25 @@ checks.push(["the empty-answer guard does not swallow a real answer after a tool
   assert.equal(fake.transcript.children.length, 2, "tool block + one answer");
   assert.equal(ctx.currentMd, null);
 
-  const answer = fake.transcript.children[1] as Container;
+  const band = fake.transcript.children[1] as SectionBand;
+  const answer = band.inner as Container;
   assert.equal(answer.children.length, 2, "label + markdown");
   assert.equal((answer.children[1] as any).text, "\n\nDone.");
+}]);
+
+checks.push(["replayed user messages keep their background across chunks", () => {
+  const { ctx } = makeContext();
+  setTheme("retrowave", null);
+  try {
+    send(ctx, { sessionUpdate: "user_message_chunk", messageId: "u1", content: { type: "text", text: "Hello " } });
+    send(ctx, { sessionUpdate: "user_message_chunk", messageId: "u1", content: { type: "text", text: "again" } });
+    assert.ok(ctx.userLine);
+    const rendered = ctx.userLine.render(30).join("");
+    assert.ok(rendered.includes("Hello again"));
+    if (process.env.FORCE_COLOR === "1") assert.ok(rendered.includes("\x1b[48;2;20;20;20m"));
+  } finally {
+    setTheme("default", null);
+  }
 }]);
 
 // ─── Runner ──────────────────────────────────────────────────────────────────

@@ -8,9 +8,9 @@
  * command (printTimeouts, changeTimeout, showTimeoutsMenu).
  */
 
-import pc from "picocolors";
+import pc, { THEME_NAMES, getTheme, setTheme } from "../theme";
 import { Text, type SelectListLayoutOptions } from "@earendil-works/pi-tui";
-import { listSessionSets, DEFAULT_PROFILE_SENTINEL } from "../rossii-config";
+import { listSessionSets, DEFAULT_PROFILE_SENTINEL, getRossiiPaths } from "../rossii-config";
 import { readProjectMeta } from "../project";
 import { getAllSessions } from "../sessions";
 import { isInsideGitRepo, getProjectSessionDirs } from "../worktree";
@@ -573,7 +573,7 @@ function showTimeoutPresets(ctx: ChatContext, kind: TimeoutKind): void {
  */
 export function showCommandsHelp(ctx: ChatContext): void {
   ctx.transcript.addChild(new Text(
-    pc.dim("The chat: ") + "/config /model /provider /set /session /rename /fork /think /tool /timeout /edit /fetch /help",
+    pc.dim("The chat: ") + "/config /model /provider /set /session /rename /fork /think /tool /timeout /edit /fetch /theme /exit /help",
     1, 0,
   ));
   ctx.transcript.addChild(new Text(
@@ -587,6 +587,32 @@ export function showCommandsHelp(ctx: ChatContext): void {
     pc.dim("Tab (or just `/`) opens the same list in the composer · ↑/↓ pick · Enter applies · Esc closes"),
     1, 0,
   ));
+  ctx.tui.requestRender();
+}
+
+/**
+ * `/theme` — bare: show the current theme and the choices; with a name: switch
+ * and save it for the next start (./theme.ts). Text already on screen keeps its
+ * colours; everything printed afterwards uses the new theme.
+ */
+export function runThemeCommand(ctx: ChatContext, args: string[]): void {
+  const say = (line: string) => ctx.transcript.addChild(new Text(line, 1, 0));
+  const choices = THEME_NAMES.join(", ");
+  if (args.length === 0) {
+    say(pc.dim("Theme: ") + pc.bold(getTheme()) + pc.dim(`  · available: ${choices} · /theme <name>`));
+    ctx.tui.requestRender();
+    return;
+  }
+  const name = args.join(" ");
+  try {
+    if (!setTheme(name, getRossiiPaths().configDir)) {
+      say(pc.yellow(`⚠ unknown theme "${name}" — available: ${choices}`));
+    } else {
+      say(pc.green(`✓ theme ${getTheme()}`) + pc.dim(" (saved; earlier text keeps its colours)"));
+    }
+  } catch (error) {
+    say(pc.yellow(`⚠ theme ${getTheme()} applied but not saved: ${(error as Error).message}`));
+  }
   ctx.tui.requestRender();
 }
 
@@ -671,8 +697,20 @@ export async function handleCommand(ctx: ChatContext, text: string): Promise<voi
     case "tool":
       toggleAllTools(ctx, args);
       return;
+    case "theme":
+      runThemeCommand(ctx, args);
+      return;
     case "help":
       showCommandsHelp(ctx);
+      return;
+    case "exit":
+    case "quit":
+      // Esc is "stop" and never quits, so a typed command is the discoverable
+      // way out besides Ctrl+C. Imported lazily: `chat-ui.ts` already imports
+      // this module, and a static import back would be a cycle.
+      ctx.transcript.addChild(new Text(pc.dim("Closing…"), 1, 0));
+      ctx.tui.requestRender();
+      void (await import("./chat-ui")).shutdown(ctx);
       return;
     default:
       // Not a command rossii implements → goose's (see ./slash-commands.ts):

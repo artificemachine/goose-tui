@@ -4,7 +4,7 @@
 
 import { basename, resolve } from "node:path";
 
-import pc from "picocolors";
+import pc from "./theme";
 
 // ─── Shared presentation ─────────────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ import pc from "picocolors";
  * and tool call). One colour for both, independent of the block's status: the
  * hint says what a click does, it is not a state.
  */
-export const hintAccent = pc.cyan;
+export const hintAccent = (s: string): string => pc.cyan(s); // through `pc`, so it follows `/theme`
 
 // ─── Environment ─────────────────────────────────────────────────────────────
 

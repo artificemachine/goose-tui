@@ -5,7 +5,7 @@
  * framed(), setPromptHandlers (readTextFile, writeTextFile, requestPermission).
  */
 
-import pc from "picocolors";
+import pc from "../theme";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {

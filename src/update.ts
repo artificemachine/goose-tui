@@ -15,7 +15,7 @@ import { createReadStream, chmodSync, existsSync, mkdirSync, renameSync, rmSync 
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 import process from "node:process";
-import pc from "picocolors";
+import pc from "./theme";
 
 import pkg from "../package.json";
 

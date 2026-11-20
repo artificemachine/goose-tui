@@ -56,7 +56,7 @@
  * against the selected set, so the set stays the single source of truth.
  */
 
-import pc from "picocolors";
+import pc from "../theme";
 
 import { AcpClient } from "./client";
 import { createChatContext } from "./chat-context";

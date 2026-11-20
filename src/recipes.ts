@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { dump as yamlDump } from "js-yaml";
 import { text, log, isCancel, outro, multiselect } from "@clack/prompts";
-import pc from "picocolors";
+import pc from "./theme";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

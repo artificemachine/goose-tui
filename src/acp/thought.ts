@@ -10,7 +10,7 @@
  * *automatic* state.
  */
 
-import pc from "picocolors";
+import pc from "../theme";
 
 import {
   Markdown,

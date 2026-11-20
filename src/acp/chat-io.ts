@@ -11,7 +11,8 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import pc from "picocolors";
+import pc from "../theme";
+import { journalError } from "../journal";
 import { Text } from "@earendil-works/pi-tui";
 import { planSteer, classifySteerError } from "./steer";
 import {
@@ -27,7 +28,7 @@ import { handleCommand } from "./chat-config";
 import { renameCurrentSession } from "./chat-session";
 import { beginTurn } from "./turn-separator";
 import { steerSession } from "./custom";
-import type { ChatContext, PendingSteer } from "./chat-context";
+import { userMessageLine, type ChatContext, type PendingSteer } from "./chat-context";
 import type { PromptResponse } from "./types";
 
 // ─── External editor ─────────────────────────────────────────────────────────
@@ -229,6 +230,7 @@ export function finishTurn(ctx: ChatContext, turnError?: string): void {
   closeMessage(ctx);
   closeToolBlocks(ctx);
   abandonPendingSteers(ctx, "steer not delivered (the turn ended)");
+  if (turnError) journalError("chat.turn", turnError);
   if (turnError && !ctx.agentDead) {
     ctx.transcript.addChild(new Text(pc.red(`⚠ ${turnError}`), 1, 0));
   }
@@ -249,7 +251,7 @@ export async function submitPrompt(ctx: ChatContext, text: string, attempt = 0):
   if (attempt === 0) {
     // The dashed rule that closes the previous exchange, then this question.
     beginTurn(ctx);
-    ctx.transcript.addChild(new Text(pc.bold(`❯ ${text}`), 1, 0));
+    ctx.transcript.addChild(userMessageLine(pc.bold(`❯ ${text}`)));
   }
   ctx.currentMd = null;
   ctx.currentMessageId = null;

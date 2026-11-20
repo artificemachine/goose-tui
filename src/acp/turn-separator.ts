@@ -21,7 +21,7 @@
  * renderer have different widths, and the width changes on a terminal resize.
  */
 
-import pc from "picocolors";
+import pc from "../theme";
 import type { Component } from "@earendil-works/pi-tui";
 
 import type { ChatContext } from "./chat-context";

@@ -8,7 +8,7 @@
 
 import { resolve } from "node:path";
 import { confirm, isCancel, log, multiselect, select, spinner, text } from "@clack/prompts";
-import pc from "picocolors";
+import pc from "./theme";
 
 import { listSessionSets, saveSessionSet, deleteSessionSet, type SessionSet } from "./rossii-config";
 import { getWorktreeMappings, removeWorktreeMapping } from "./project";

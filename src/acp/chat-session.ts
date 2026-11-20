@@ -5,7 +5,8 @@
  * forkCurrentSession, renameCurrentSession, promptRename.
  */
 
-import pc from "picocolors";
+import pc from "../theme";
+import { journalError } from "../journal";
 import { Text } from "@earendil-works/pi-tui";
 import { listSessionSets, DEFAULT_PROFILE_SENTINEL } from "../rossii-config";
 import { getAllSessions } from "../sessions";
@@ -87,6 +88,7 @@ export async function setupSession(
     ctx.tui.requestRender();
   } catch (error) {
     ctx.setupFailed = true;
+    journalError("chat.setup", error);
     ctx.transcript.addChild(new Text(
       pc.red(`⚠ ACP setup failed: ${String((error as Error)?.message ?? error)}`),
       1, 0,

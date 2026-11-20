@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { select, text, password, confirm, log, spinner, isCancel, outro } from "@clack/prompts";
-import pc from "picocolors";
+import pc from "./theme";
 import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 
 // ─── Paths ───────────────────────────────────────────────────────────────────

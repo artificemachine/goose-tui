@@ -8,7 +8,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import pc from "picocolors";
+import pc from "./theme";
 
 import pkg from "../package.json";
 import { env } from "./utils";
@@ -120,16 +120,16 @@ function envSettings(): string[] {
 
 /** Print the diagnostic report. Returns the process exit code. */
 export function runDoctor(): number {
-  console.log(`\n  ${pc.green("🪿 rossii doctor")}\n`);
+  console.log(`\n  ${pc.green("🪿 goose-tui doctor")}\n`);
 
   // ── Runtime ──────────────────────────────────────────────────────────────
-  line("rossii", `${pkg.version} ${pc.dim(`· bun ${Bun.version} · ${process.platform} ${process.arch}`)}`);
+  line("goose-tui", `${pkg.version} ${pc.dim(`· bun ${Bun.version} · ${process.platform} ${process.arch}`)}`);
 
   // ── goose ────────────────────────────────────────────────────────────────
   const gooseVersion = sh("goose", ["--version"])?.split("\n")[0] ?? null;
   if (!gooseVersion) {
-    line("goose", bad("not found on PATH — install it before running rossii"));
-    console.log(`\n  ${pc.dim("Everything else is skipped: rossii launches goose.")}\n`);
+    line("goose", bad("not found on PATH — install it before running goose-tui"));
+    console.log(`\n  ${pc.dim("Everything else is skipped: goose-tui launches goose.")}\n`);
     return 1;
   }
   line("goose", ok(gooseVersion));
@@ -137,7 +137,7 @@ export function runDoctor(): number {
   const acp = sh("goose", ["acp", "--help"]) !== null;
   line("acp", acp
     ? ok("supported (chat mode)")
-    : warn("not supported by this goose — rossii falls back to the classic TUI"));
+    : warn("not supported by this goose — goose-tui falls back to the classic TUI"));
 
   // ── goose config / providers ─────────────────────────────────────────────
   const gooseConfig = getGooseConfigPath();
@@ -153,9 +153,9 @@ export function runDoctor(): number {
     ? `${providers.length} (${providers.join(", ")})`
     : warn("none — run `goose configure` first"));
 
-  // ── rossii config / sets ─────────────────────────────────────────────────
+  // ── goose-tui config / sets ────────────────────────────────────────────────
   const paths = getRossiiPaths();
-  line("rossii cfg", pathState(paths.configPath));
+  line("cfg", pathState(paths.configPath));
   const rossiiConfig = readRossiiConfig();
   line("mode", `${rossiiConfig.default_mode} ${pc.dim("(default_mode in config.json; -m / -w override)")}`);
 

@@ -6,10 +6,12 @@
  * stopIdleWatchdog, attachAgentExit, shutdown.
  */
 
-import pc from "picocolors";
+import pc, { getTheme, stylePrompt } from "../theme";
+import { journalError } from "../journal";
 import {
   Container,
   Editor,
+  HStack,
   Key,
   Loader,
   ProcessTerminal,
@@ -21,7 +23,10 @@ import {
   VStack,
   isViewportTUI,
   matchesKey,
+  type Component,
   type TUI,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
 
 import { editorTheme } from "./chat-context";
@@ -35,6 +40,72 @@ import { cancelAllPermissions } from "./chat-handlers";
 import type { ChatContext } from "./chat-context";
 
 // ─── UI assembly ─────────────────────────────────────────────────────────────
+
+export class PromptEditor extends Editor {
+  private framed = false;
+  private bottomBorder = "";
+
+  protected override renderTopBorder(width: number, hiddenLineCount: number): string {
+    const line = super.renderTopBorder(width, hiddenLineCount);
+    return this.framed ? pc.cyan("╭") + line + pc.cyan("╮") : line;
+  }
+
+  protected override renderBottomBorder(width: number, hiddenLineCount: number): string {
+    const line = super.renderBottomBorder(width, hiddenLineCount);
+    this.bottomBorder = this.framed ? pc.cyan("╰") + line + pc.cyan("╯") : line;
+    return this.bottomBorder;
+  }
+
+  override render(width: number): string[] {
+    this.framed = getTheme() === "retrowave" && width >= 4;
+    if (!this.framed) return super.render(width).map(stylePrompt);
+    return super.render(width - 2).map((line, index) =>
+      stylePrompt(index === 0 || line === this.bottomBorder ? line : pc.cyan("│") + line + pc.cyan("│")),
+    );
+  }
+
+  override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (getTheme() !== "retrowave" || event.width < 4) return super.handleMouse(event);
+    return super.handleMouse({ ...event, x: event.x - 1, width: event.width - 2 });
+  }
+}
+
+export class StatusSurface implements Component {
+  constructor(private readonly content: Component) {}
+  invalidate(): void { this.content.invalidate(); }
+  render(width: number): string[] {
+    const lines = this.content.render(width);
+    if (getTheme() !== "retrowave" || !pc.isColorSupported) return lines;
+    const foreground = "\x1b[38;2;224;222;244m";
+    const background = "\x1b[48;2;52;42;72m";
+    return lines.map((line) => foreground + background + line
+      .replace(/\x1b\[(?:2|22)m/g, "")
+      .replace(/\x1b\[(?:0|39|49)?m/g, (reset) => reset + foreground + background) + "\x1b[39m\x1b[49m");
+  }
+}
+
+export function conversationView(document: Container, rows: () => number): VStack {
+  const visible = ({ width, height }: { width: number; height: number }) =>
+    getTheme() === "retrowave" && width >= 3 && height >= 4;
+  const edge = (left: string, fill: string, right: string): Component => ({
+    invalidate() {},
+    render: (width) => [pc.cyan(left + fill.repeat(Math.max(0, width - 2)) + right)],
+  });
+  const side: Component = {
+    invalidate() {},
+    render: () => Array.from({ length: Math.max(0, rows()) }, () => pc.cyan("│")),
+  };
+  const scroll = new ScrollView(document, { follow: "end", primary: true, overscroll: "chain" });
+  return new VStack([
+    { component: edge("╭", "─", "╮"), basis: 1, visible },
+    { component: new HStack([
+      { component: side, basis: 1, visible },
+      { component: scroll, basis: 0, grow: 1, minSize: 1 },
+      { component: side, basis: 1, visible },
+    ]), basis: 0, grow: 1, minSize: 1 },
+    { component: edge("╰", "─", "╯"), basis: 1, visible },
+  ]);
+}
 
 /**
  * Build the whole renderer: terminal, transcript, composer, layout root.
@@ -77,7 +148,7 @@ export function setupUi(ctx: ChatContext): void {
   // 8 rows of completion: the chat's twelve names plus goose's (builtins,
   // recipes, skills) is around two dozen, and the editor scrolls the rest with
   // its "(1/24)" counter.
-  ctx.editor = new Editor(tui, editorTheme, { paddingX: 1, autocompleteMaxVisible: 8 });
+  ctx.editor = new PromptEditor(tui, editorTheme, { paddingX: 1, autocompleteMaxVisible: 8 });
   // The `/…` menu. The list is read lazily — goose announces its own commands
   // after `session/new`, which is later than this line (./command-complete.ts).
   ctx.editor.setAutocompleteProvider(
@@ -94,14 +165,10 @@ export function setupUi(ctx: ChatContext): void {
     document.addChild(new Spacer());
     document.addChild(ctx.transcript);
 
-    const composer = new VStack([loader, new Spacer(), ctx.editor, ctx.statusLine]);
+    const composer = new VStack([loader, new Spacer(), ctx.editor, new StatusSurface(ctx.statusLine)]);
     tui.setLayoutRoot(new VStack([
       {
-        component: new ScrollView(document, {
-          follow: "end",
-          primary: true,
-          overscroll: "chain",
-        }),
+        component: conversationView(document, () => terminal.rows),
         basis: 0,
         grow: 1,
         minSize: 1,
@@ -115,7 +182,7 @@ export function setupUi(ctx: ChatContext): void {
     tui.addChild(loader);
     tui.addChild(new Spacer());
     tui.addChild(ctx.editor);
-    tui.addChild(ctx.statusLine);
+    tui.addChild(new StatusSurface(ctx.statusLine));
   }
 }
 
@@ -164,27 +231,20 @@ export function attachInputListener(ctx: ChatContext): void {
     // Enter as CR, which *is* Ctrl+M, so the binding would fire on every
     // submitted prompt — Ctrl+O is the free equivalent.
     if (matchesKey(data, Key.ctrl("p"))) {
-      ctx.escArmedExit = false;
       showConfigMenu(ctx);
       return { consume: true };
     }
     if (matchesKey(data, Key.ctrl("o"))) {
-      ctx.escArmedExit = false;
       showModelMenu(ctx);
       return { consume: true };
     }
     if (matchesKey(data, Key.ctrl("e"))) {
-      ctx.escArmedExit = false;
       void promptInEditor(ctx);
       return { consume: true };
     }
     const escape = matchesKey(data, Key.escape);
     const ctrlC = matchesKey(data, Key.ctrl("c"));
-    if (!escape && !ctrlC) {
-      // Any other key means the user is still typing — disarm the exit.
-      ctx.escArmedExit = false;
-      return undefined;
-    }
+    if (!escape && !ctrlC) return undefined;
 
     if (ctx.agentDead || ctx.client.closed) {
       void shutdown(ctx);
@@ -219,21 +279,17 @@ export function attachInputListener(ctx: ChatContext): void {
     // Esc with the autocomplete menu open belongs to the editor (it closes the
     // menu) — the draft must survive that.
     if (ctx.editor.capturesViewportInput) return undefined;
-    // The editor does not handle Esc itself, so a non-empty draft used to make
-    // Esc a dead key. Require a second Esc instead of silently doing nothing.
-    if (ctx.editor.getText().length > 0 && !ctx.escArmedExit) {
-      ctx.escArmedExit = true;
-      if (!ctx.exitHintShown) {
-        ctx.exitHintShown = true;
-        ctx.transcript.addChild(new Text(
-          pc.dim("Esc again to exit (the draft will be lost) · Ctrl+C exits right away"),
-          1, 0,
-        ));
-        ctx.tui.requestRender();
-      }
-      return { consume: true };
+    // Esc is "stop", never "quit": it cancelled the turn above, and with no
+    // turn running it does nothing. Quitting is Ctrl+C alone, because losing the
+    // whole chat to a key meant for cancelling is the worst outcome of the two.
+    if (!ctx.exitHintShown) {
+      ctx.exitHintShown = true;
+      ctx.transcript.addChild(new Text(
+        pc.dim("Esc cancels a running turn · Ctrl+C exits"),
+        1, 0,
+      ));
+      ctx.tui.requestRender();
     }
-    void shutdown(ctx);
     return { consume: true };
   });
 }
@@ -323,6 +379,7 @@ export function attachAgentExit(ctx: ChatContext): void {
     closeThought(ctx);
     closeToolBlocks(ctx);
     abandonPendingSteers(ctx, "goose exited before the steer was delivered");
+    journalError("chat.agent", `goose acp exited unexpectedly: ${ctx.stderrTail.slice(-5).join(" | ")}`);
     ctx.transcript.addChild(new Text(pc.red("⚠ goose acp exited unexpectedly"), 1, 0));
     for (const line of ctx.stderrTail.slice(-5)) {
       ctx.transcript.addChild(new Text(pc.dim(line), 1, 0));
