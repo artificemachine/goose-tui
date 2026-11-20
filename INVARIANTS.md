@@ -31,8 +31,11 @@ placeholder tolerance and test-target resolution as this registry.
 Add this project's own invariants below, starting at `INV-4`: one line each, stating
 what must hold about the data this project owns, bound to the test that proves it.
 
+- [INV-4] Every identifier shared with upstream keeps the name `rossii` (the client name goose stores with a session, the state directory, the `ROSSII_*` environment variables), so merging upstream never has to rename anything. -> tests/launcher.test.ts::identifiers_stay_rossii
+
 ## What the bindings prove
 
 - INV-1: the fatal handler, a failed chat turn, a failed ACP setup, an agent that exits and a failed browser turn all call the journal, and a failed turn is announced as an error, never as done. A failure the code swallows without calling the journal is outside what the test can see.
 - INV-2: each distinct failure gets one local report, counted and labelled `AI-gen`, with `published: false`. Turning a report into an issue on a tracker is a step a person or an agent performs; no code here publishes one.
 - INV-3: secret values from the environment and bearer tokens are redacted before anything is written.
+- INV-4: the session client name and the state directory, with its environment variable, are checked. The config directory and the other `ROSSII_*` variables follow the same rule and are not each tested.

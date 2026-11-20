@@ -46,3 +46,7 @@ traceability has no silent dead end. Every path resolves to an existing file
 under `docs/specs/`.
 
 - [SPEC-001] Project foundation contract (docs/specs/SPEC-001-project-foundation.md) status: draft
+- [SPEC-002] Colour themes (docs/specs/SPEC-002-themes.md) status: draft
+- [SPEC-003] Browser surface (docs/specs/SPEC-003-browser-surface.md) status: draft
+- [SPEC-004] Interrupting and leaving the chat (docs/specs/SPEC-004-chat-keys.md) status: draft
+- [SPEC-005] Launcher and name (docs/specs/SPEC-005-launcher-and-name.md) status: draft

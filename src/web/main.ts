@@ -35,6 +35,8 @@ export interface WebServerOptions {
 export interface RunningWebServer {
   /** The port actually bound (`--port 0` lets the OS choose). */
   port: number;
+  /** The address actually bound; loopback unless the operator chose another. */
+  hostname: string;
   stop: () => void;
 }
 
@@ -70,6 +72,7 @@ export function startWebServer(opts: WebServerOptions = {}): RunningWebServer {
   return {
     // Bun leaves `port` undefined for a socket-only server; this one is TCP.
     port: server.port ?? port,
+    hostname: server.hostname ?? hostname,
     stop: () => {
       app.dispose();
       server.stop(true);
