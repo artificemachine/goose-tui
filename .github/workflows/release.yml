@@ -14,9 +14,9 @@ jobs:
     # build.sh refuses to publish a binary with a foreign loader.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
 
@@ -32,9 +32,12 @@ jobs:
         run: bash build.sh
 
       - name: Publish release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             rossii-*-linux-x86_64
             rossii-*-linux-x86_64.sha256
           generate_release_notes: true
+          # A release candidate must never become the "latest" stable release,
+          # which is what `rossii update` installs without --pre.
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}
