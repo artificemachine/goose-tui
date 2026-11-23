@@ -12,6 +12,8 @@ import { describe, expect, test } from "bun:test";
 import { Container, Text } from "@earendil-works/pi-tui";
 
 import { RecapSurface, conversationView } from "../src/acp/chat-ui";
+import { renderStatus } from "../src/acp/chat-stream";
+import { projectNameFromCwd } from "../src/utils";
 import { RECAP_HINT, RECAP_MAX_ROWS, buildRecapLine } from "../src/acp/recap";
 
 const plain = (rows: string[]) =>
@@ -62,5 +64,33 @@ describe("the recap line surface", () => {
 
   test("no_recap_is_one_empty_row", () => {
     expect(new RecapSurface(() => null).render(80)).toEqual([""]);
+  });
+});
+
+describe("the status line", () => {
+  const ctxOf = (overrides: Record<string, unknown> = {}) =>
+    ({
+      projectName: "goose-tui",
+      currentProvider: "custom_deepseek",
+      currentModel: "deepseek-flash",
+      currentSetLabel: "Default",
+      statusSegments: [],
+      tui: { requestRender() {} },
+      ...overrides,
+    }) as any;
+
+  test("the_project_comes_first", () => {
+    const ctx = ctxOf();
+    renderStatus(ctx);
+    expect(ctx.statusSegments[0]).toEqual({ kind: "project", label: "goose-tui" });
+    expect(ctx.statusSegments.map((s: any) => s.kind)).toEqual(["project", "model", "set"]);
+  });
+
+  test("the project name follows the working directory, worktrees included", () => {
+    expect(projectNameFromCwd("/Users/me/code/goose-tui")).toBe("goose-tui");
+    expect(projectNameFromCwd("/Users/me/code/goose-tui/")).toBe("goose-tui");
+    // A worktree is the same project, not a project called `feat-x`.
+    expect(projectNameFromCwd("/Users/me/code/goose-tui/.worktree/feat-x")).toBe("goose-tui");
+    expect(projectNameFromCwd("/")).toBe("?");
   });
 });

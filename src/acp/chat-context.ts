@@ -8,7 +8,7 @@
 import pc, { themeChrome } from "../theme";
 import { userBandBg, userBandFg } from "./section-band";
 
-import { env, formatCharCount } from "../utils";
+import { env, formatCharCount, projectNameFromCwd } from "../utils";
 
 import type {
   GooseExtension,
@@ -152,7 +152,7 @@ export interface ExtensionPlanState {
  * found again (tests, future filtering) without matching on its text.
  */
 export interface StatusSegment {
-  kind: "model" | "set" | "usage";
+  kind: "project" | "model" | "set" | "usage";
   label: string;
 }
 
@@ -272,6 +272,8 @@ export interface ChatContext {
    * every change; `StatusSurface` reads it at render time (it is a function, so
    * a repaint always shows the current chips).
    */
+  /** The working directory's project, named first in the status line. */
+  projectName: string;
   statusSegments: StatusSegment[];
   headerLine: Text;
   editor: Editor;
@@ -546,6 +548,7 @@ export function createChatContext(opts: AcpChatOptions): ChatContext {
     // ACP client (set by chat.ts)
     client: null as unknown as AcpClient,
     cwd: opts.cwd,
+    projectName: projectNameFromCwd(opts.cwd),
 
     // Prompt handlers
     awaitingRename: false,

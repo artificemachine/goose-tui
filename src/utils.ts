@@ -61,6 +61,23 @@ export function getCurrentDirName(): string {
 }
 
 /**
+ * The name of the project a working directory belongs to.
+ *
+ * The status line names the project first, because a session opened in
+ * `~/.worktree/<name>` or in a subdirectory is still the same project: the
+ * worktree path is cut at `/.worktree/`, so goose running inside one reports
+ * the repository it belongs to and not the branch it is on. Pure string work
+ * on purpose — the status line is rebuilt on every usage update, and a `git`
+ * call per frame would be a visible cost.
+ */
+export function projectNameFromCwd(cwd: string): string {
+  const worktree = cwd.indexOf("/.worktree/");
+  const path = worktree === -1 ? cwd : cwd.slice(0, worktree);
+  const name = basename(path.replace(/[\\/]+/g, "/").replace(/\/+$/, ""));
+  return name === "" ? "?" : name;
+}
+
+/**
  * Group thousands with plain ASCII spaces: `1000000` → `"1 000 000"`.
  *
  * `toLocaleString("ru-RU")` inserts U+00A0 / U+202F here. Terminals handle those

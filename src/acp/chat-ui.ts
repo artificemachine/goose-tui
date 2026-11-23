@@ -195,7 +195,19 @@ export class StatusSurface implements Component {
     const labels = this.segments().map((segment) => segment.label.trim()).filter((label) => label !== "");
     if (labels.length === 0) return [""];
     const chrome = themeChrome();
-    if (!chrome || !pc.isColorSupported) return [pc.dim(labels.join("  "))];
+    if (!chrome || !pc.isColorSupported) {
+      // No colour means no chips, but not "paint past the edge": keep the
+      // labels that fit, in order, and drop the rest.
+      const kept: string[] = [];
+      let plain = "";
+      for (const label of labels) {
+        const candidate = plain === "" ? label : `${plain}  ${label}`;
+        if (visibleWidth(candidate) > width) break;
+        plain = candidate;
+        kept.push(label);
+      }
+      return [pc.dim(kept.length > 0 ? kept.join("  ") : [...labels[0]!].slice(0, width).join(""))];
+    }
     const chips = STATUS_CHIPS;
     const text = bandForeground(chrome.statusFg);
     const out: string[] = [];

@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 
-import { Container, Key } from "@earendil-works/pi-tui";
+import { Container, Key, getKeybindings } from "@earendil-works/pi-tui";
 
 import { attachInputListener } from "../src/acp/chat-ui.ts";
 import type { ChatContext } from "../src/acp/chat-context.ts";
@@ -148,6 +148,14 @@ ok("Esc leaves the autocomplete menu to the editor", () => {
 
 ok("Key.escape is the identifier the listener matches", () => {
   assert.equal(Key.escape, "escape");
+});
+
+ok("the editor already means end-of-line by Ctrl+E, so freeing it costs nothing", () => {
+  // Why the chat may let `^E` through: pi-tui's own editor binds it to
+  // `cursorLineEnd` (``"end", "ctrl+e"``), which is what a macOS terminal sends
+  // for Cmd+Right. Releasing the byte gives the user the key they pressed.
+  const keys = getKeybindings().getKeys("tui.editor.cursorLineEnd");
+  assert.ok(keys.includes("ctrl+e"), `cursorLineEnd keys: ${keys.join(", ")}`);
 });
 
 ok("Ctrl+E is the terminal's: a mac sends it for Cmd+Right", () => {

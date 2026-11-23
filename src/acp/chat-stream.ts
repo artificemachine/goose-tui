@@ -218,7 +218,10 @@ let usagePart = "";
 // strip (see `StatusSurface`). Rebuilt as a whole on every change, so a usage
 // update never wipes the model chip.
 export function renderStatus(ctx: ChatContext): void {
-  const segments: StatusSegment[] = [{ kind: "model", label: `${ctx.currentProvider}/${ctx.currentModel}` }];
+  // The project comes first: with several windows open, "which repository am I
+  // in" is the question the bar answers before "which model".
+  const segments: StatusSegment[] = [{ kind: "project", label: ctx.projectName }];
+  segments.push({ kind: "model", label: `${ctx.currentProvider}/${ctx.currentModel}` });
   // The set decides the system prompt and the extension list, so its short
   // label sits with the pair it applies to (the header carries the long form).
   if (ctx.currentSetLabel) segments.push({ kind: "set", label: `set: ${ctx.currentSetLabel}` });
