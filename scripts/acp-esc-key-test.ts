@@ -150,6 +150,16 @@ ok("Key.escape is the identifier the listener matches", () => {
   assert.equal(Key.escape, "escape");
 });
 
+ok("Ctrl+E is the terminal's: a mac sends it for Cmd+Right", () => {
+  // A macOS terminal maps Cmd+Right to ^E, the end-of-line key. Binding the
+  // external editor there opened `$EDITOR` in the middle of navigating the
+  // composer, so the listener must leave the byte alone (`/edit` keeps the
+  // feature).
+  const h = makeHarness();
+  assert.equal(h.press("\x05"), undefined, "Ctrl+E is not consumed by the chat");
+  assert.equal(h.transcript.children.length, 0, "and nothing was printed in its place");
+});
+
 let failed = 0;
 for (const [name, run] of checks) {
   try {

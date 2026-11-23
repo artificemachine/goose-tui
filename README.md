@@ -285,7 +285,6 @@ steered: goose only looks for a command in a turn's prompt).
 |-----|------|
 | `Ctrl+P` | the configuration menu (`/config`) |
 | `Ctrl+O` | the model menu (`/model`) |
-| `Ctrl+E` | the external editor (`/edit`) |
 | `Ctrl+J` | a line break in the composer (`Shift+Enter` too, where the terminal reports it; `\` then Enter anywhere) |
 
 Enter is a single `CR` byte, and `Shift+Enter` has no legacy encoding at all — without a keyboard protocol
@@ -295,8 +294,9 @@ terminals that speak them (VS Code's integrated terminal among them) and cannot 
 not (a legacy GNOME Terminal, xterm, Alacritty). `Ctrl+J` is `LF`, a byte of its own, so it inserts a line
 in every terminal — that is why it is the one to remember. `\` followed by Enter is pi-tui's built-in
 fallback for the rest: it deletes the backslash and breaks the line instead of sending, which also means a
-real trailing `\` cannot be sent that way. And when a line break is not the point, `Ctrl+E` hands the whole
-draft to `$EDITOR`.
+real trailing `\` cannot be sent that way. And when a line break is not the point, `/edit` hands the whole draft to `$EDITOR` (deliberately no
+shortcut: a macOS terminal sends `Ctrl+E` for `⌘→`, the end-of-line key, so binding it opened an editor
+in the middle of navigation).
 
 `Ctrl+M` cannot be bound to the model menu: a terminal sends Enter as CR, which *is* Ctrl+M, so the
 shortcut would fire every time you submit a prompt. `Ctrl+O` is the free equivalent.

@@ -49,7 +49,7 @@ export const CHAT_COMMANDS: readonly AutocompleteItem[] = [
   { value: "tool", label: "tool", description: "Expand or collapse the tool-call blocks (`all`)" },
   { value: "timeout", label: "timeout", description: "Idle/tool watchdog: `/timeout 30m`, `/timeout tool 1h`, `reset`" },
   { value: "recap-config", label: "recap-config", description: "Recap line above the composer: `/recap-config on|off`, `auto on|off|30s`" },
-  { value: "edit", label: "edit", description: "Edit the draft in $EDITOR (Ctrl+E)" },
+  { value: "edit", label: "edit", description: "Edit the draft in $EDITOR (no shortcut: Ctrl+E is end-of-line)" },
   { value: "fetch", label: "fetch", description: "Fetch the model list from the provider's API" },
   { value: "theme", label: "theme", description: "Colour theme: `/theme dracula` (saved), bare `/theme` lists them" },
   { value: "help", label: "help", description: "List the commands — the chat's and goose's" },

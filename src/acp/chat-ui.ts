@@ -41,7 +41,7 @@ import { closeThought, closeToolBlocks, renderHeader, renderStatus } from "./cha
 import { showConfigMenu, showModelMenu } from "./chat-config";
 import { currentTimeouts, timeoutWarnings } from "./timeout-state";
 import { planIdleAction } from "./timeouts";
-import { abandonPendingSteers, promptInEditor, setLoader } from "./chat-io";
+import { abandonPendingSteers, setLoader } from "./chat-io";
 import { cancelAutoRecap } from "./recap-auto";
 import { cancelAllPermissions } from "./chat-handlers";
 import type { ChatContext, StatusSegment } from "./chat-context";
@@ -348,7 +348,7 @@ export function startChat(ctx: ChatContext): void {
   }
   ctx.transcript.addChild(new Text(
     pc.dim(
-      "Type / for the command list (Tab completes it, /help prints it) · /config changes provider, model, set or session · Ctrl+P config · Ctrl+O model · Ctrl+E $EDITOR" +
+      "Type / for the command list (Tab completes it, /help prints it) · /config changes provider, model, set or session · Ctrl+P config · Ctrl+O model · /edit $EDITOR" +
         " · Enter sends; Ctrl+J adds a line (Shift+Enter where the terminal reports it, \\ then Enter anywhere)" +
         (ctx.steeringEnabled ? " · Enter during a turn adds to that turn, Esc cancels it" : ""),
     ),
@@ -390,10 +390,6 @@ export function attachInputListener(ctx: ChatContext): void {
     }
     if (matchesKey(data, Key.ctrl("o"))) {
       showModelMenu(ctx);
-      return { consume: true };
-    }
-    if (matchesKey(data, Key.ctrl("e"))) {
-      void promptInEditor(ctx);
       return { consume: true };
     }
     const escape = matchesKey(data, Key.escape);

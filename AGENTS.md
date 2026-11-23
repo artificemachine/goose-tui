@@ -483,12 +483,17 @@ warns in the TUI and keeps the ACP default.
     unit-tested) draws a titled box around the SelectList; long lists use `SearchableList`,
     which adds a filter line and matches by **substring** (the stock `setFilter` is
     prefix-only, useless for 700 model ids) while forwarding arrows/Enter/Esc
-  - `/edit` (Ctrl+E) suspends the renderer with `tui.stop({ preserveScreen: true })`, runs
+  - `/edit` (no shortcut — see the note on Ctrl+E below) suspends the renderer with
+    `tui.stop({ preserveScreen: true })`, runs
     `$VISUAL`/`$EDITOR`/`vi` on the real terminal via `sh -c '<editor> "$1"'` with the composer's
     draft as the buffer, then `tui.start()` takes the chat back; a clean exit sends the file's
     content through the normal `submitPrompt()`, a non-zero exit sends nothing
   - Ctrl+P opens `/config` (alias `/settings`), Ctrl+O opens `/model`. **Ctrl+M is Enter** (CR is
     the Ctrl+M control character), so it cannot be a shortcut — it would fire on every prompt
+  - **Ctrl+E is not a shortcut either**: a macOS terminal sends `^E` for `⌘→` (the end-of-line key),
+    so the old `/edit` binding opened `$EDITOR` in the middle of navigating the composer. The feature
+    stays, the key is the terminal's again (`scripts/acp-esc-key-test.ts` pins that the listener
+    leaves it alone)
   - rename → `_goose/unstable/session/rename`; a bare `/rename` (or the menu entry) asks the
     composer for the title, Esc cancels without exiting
   - fork → `session/fork` (returns a new session id; probe `scripts/acp-fork-probe.ts`), the
