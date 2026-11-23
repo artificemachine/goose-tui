@@ -56,7 +56,11 @@ against the asset digest or `.sha256`, atomic rename over the running binary; it
 helpers — version comparison, asset naming, checksum parsing, target selection — are
 unit-tested in `scripts/update-test.ts`).
 
-If no project meta exists yet, first option is selected (None → first provider → first model).
+If no project meta exists yet, the set step preselects **Default** — the profile from
+`~/.config/goose/config.yaml` — then the first provider and the first model. It used to preselect
+None, and None means no extensions at all: a fresh clone opened an agent with no file or shell
+tools. An explicit None or Default already in the project history is kept as it is
+(`defaultSetSelection()` in `src/rossii-config.ts`, unit-tested).
 
 ## Session Sets
 
@@ -273,8 +277,14 @@ warns in the TUI and keeps the ACP default.
     `_goose/unstable/config/extensions/list`) is the source: goose filters HIDDEN platform
     extensions out of that RPC (`is_hidden_extension`) — in 1.57 those are `scheduler` and
     `orchestrator`, so the RPC would silently drop the scheduler on every Default switch
-  - after creating a session the chat reads the real extension list and warns only if profile
-    extensions leaked in (a goose that ignores the field) or expected ones are missing
+  - after creating a session the chat reads the real extension list and warns in three cases:
+    the profile leaked in (a goose that ignores the field), an expected extension is missing, or
+    the session has no `developer` at all — the last one means no file/shell tools, which is what
+    a set naming no `developer` (None, or one written by hand without it) produces. That warning
+    names `/set` (the extensions switch in place over goose's extension API) and, as the reliable
+    fallback, a new session: an agent that has already asserted "only load_skill" can keep
+    asserting it after the tools are there. Measured on goose 1.59.2 — `hasFileShellTools()` in
+    `src/acp/extensions.ts`
   - system prompt → goose custom request `_goose/unstable/session/system-prompt/set`
     (`mode: "set"`, key `rossii`); empty text clears it — same "set is source of
     truth" semantics as classic `--system`. A failure here is non-fatal (warning only).
@@ -501,9 +511,12 @@ Write `~/.config/rossii/sets/<name>.json` with the shape above, or use the TUI w
 Delete the corresponding file in `~/.config/rossii/projects/`.
 
 ### Build the release binary
-`bash build.sh` — writes `rossii-<version>-linux-x86_64` and its `.sha256`, and refuses to leave an
-artifact whose loader is not `/lib64/ld-linux-x86-64.so.2` or that needs a C++/musl runtime (the
-released 2.0.2 … 3.0.0 had Homebrew's loader baked in and started only on the build machine).
+`bash build.sh` — writes `rossii-<version>-<os>-<arch>` and its `.sha256`, where `os` and `arch`
+come from `uname`: the name states what was compiled, never a target (a host with no mapping is
+refused). On Linux it also refuses to leave an artifact whose loader is not
+`/lib64/ld-linux-x86-64.so.2` or that needs a C++/musl runtime (the released 2.0.2 … 3.0.0 had
+Homebrew's loader baked in and started only on the build machine). That gate is an ELF rule and
+`readelf` does not exist on macOS, so it runs only for `OS=linux`.
 
 Do **not** add `--target=…` to that command: an explicit target makes Bun download the official
 release for it and can replace the installed `bun` (observed 1.4.0 → 1.4.4 mid-session, artifacts
