@@ -225,7 +225,10 @@ export function renderStatus(ctx: ChatContext): void {
   // The branch follows the project: together they answer "where am I", and a
   // session in a worktree needs it — that is the whole point of the worktree.
   if (ctx.projectBranch) segments.push({ kind: "branch", label: formatBranch(ctx.projectBranch) });
-  segments.push({ kind: "model", label: `${ctx.currentProvider}/${ctx.currentModel}` });
+  // The model alone: on a narrow bar `custom_deepseek/deepseek-flash` spends
+  // fifteen columns on the provider half, and the provider does not change the
+  // answer — the header still carries the pair for when it matters.
+  segments.push({ kind: "model", label: ctx.currentModel });
   // The set decides the system prompt and the extension list, so its short
   // label sits with the pair it applies to (the header carries the long form).
   if (ctx.currentSetLabel) segments.push({ kind: "set", label: `set: ${ctx.currentSetLabel}` });

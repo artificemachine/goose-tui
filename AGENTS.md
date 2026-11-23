@@ -415,8 +415,15 @@ warns in the TUI and keeps the ACP default.
   3.8:1), so the bar looks the same in every theme and only the text takes the
   theme's colour (`statusFg`). A new theme needs no work here. The label of each chip is text, so
   `renderStatus` (`chat-stream.ts`) publishes segments (`ctx.statusSegments`,
-  model / set / usage) rather than one pre-joined dim string, and a narrow terminal
-  drops the chips that no longer fit instead of overflowing
+  project / branch / model / set / usage) rather than one pre-joined dim string, and a narrow terminal
+  drops the chips that no longer fit instead of overflowing. The project comes first
+  (`projectNameFromCwd`, a worktree resolving to its repository), the branch next
+  (`readGitBranch`, re-read at the start of each turn, so a `git switch` elsewhere
+  is not stale; `formatBranch` elides past 32 columns in the middle), and the model
+  chip names **only** the model — `custom_deepseek/deepseek-flash` spent fifteen
+  columns on a provider that changes nothing about the answer, and the header
+  still carries the pair. `tests/surfaces.test.ts` pins the order, the labels and
+  the elision.
 - **herdr** — `src/herdr.ts` reports this session's state to the pane's left-menu
   dot, the same shape as `pi-agent`'s `extensions/herdr-selfreport.ts` (itself
   lifted from AndrewJacop/pi-herdr, MIT): `isEnabled(env)` requires

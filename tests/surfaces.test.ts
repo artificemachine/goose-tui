@@ -88,6 +88,14 @@ describe("the status line", () => {
     expect(ctx.statusSegments.map((s: any) => s.kind)).toEqual(["project", "branch", "model", "set"]);
   });
 
+  test("the model chip names the model alone, the provider stays in the header", () => {
+    const ctx = ctxOf();
+    renderStatus(ctx);
+    const model = ctx.statusSegments.find((s: any) => s.kind === "model");
+    expect(model).toEqual({ kind: "model", label: "deepseek-flash" });
+    expect(model.label).not.toContain("custom_deepseek");
+  });
+
   test("the branch follows the project, and is absent outside a repository", () => {
     const inRepo = ctxOf();
     renderStatus(inRepo);
