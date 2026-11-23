@@ -56,6 +56,37 @@ export function isInsideGitRepo(): boolean {
 }
 
 /**
+ * The branch checked out in `cwd`, for the status line.
+ *
+ * `--abbrev-ref HEAD` answers the branch name, or the literal `HEAD` on a
+ * detached checkout — which is not a usable label, so the short sha is read
+ * instead. Returns null outside a repository (or when git is missing), and the
+ * caller simply shows no branch chip.
+ */
+export function readGitBranch(cwd?: string): string | null {
+  const branch = tryGit(["rev-parse", "--abbrev-ref", "HEAD"], { cwd, timeout: 3_000 })?.trim();
+  if (!branch) return null;
+  if (branch !== "HEAD") return branch;
+  const sha = tryGit(["rev-parse", "--short", "HEAD"], { cwd, timeout: 3_000 })?.trim();
+  return sha ? `detached@${sha}` : "detached";
+}
+
+/** How long a branch may be before the chip elides it, in columns. */
+const BRANCH_MAX = 32;
+
+/**
+ * A branch name as the chip shows it: `feat/darwin-release-assets` kept whole,
+ * a longer one cut in the middle, because the two ends are what identify it
+ * (`feat/…-assets` reads, `feat/darwin-release-…` does not).
+ */
+export function formatBranch(branch: string, max = BRANCH_MAX): string {
+  if (branch.length <= max) return branch;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = Math.floor((max - 1) / 2);
+  return `${branch.slice(0, head)}…${branch.slice(branch.length - tail)}`;
+}
+
+/**
  * Get the main repository root.
  *
  * Inside a rossii worktree `<repo>/.worktree/<name>` git reports the worktree

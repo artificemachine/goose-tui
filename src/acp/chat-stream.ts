@@ -20,6 +20,7 @@ import { beginTurn } from "./turn-separator";
 import { buildRecapLine, classifyRecapHead, isRecapCommand } from "./recap";
 import { answerLabel, formatCost, markdownTheme, userMessageLine } from "./chat-context";
 import type { StatusSegment } from "./chat-context";
+import { formatBranch, readGitBranch } from "../worktree";
 import { SectionBand } from "./section-band";
 import type { ChatContext } from "./chat-context";
 import type { SessionNotification } from "./types";
@@ -221,6 +222,9 @@ export function renderStatus(ctx: ChatContext): void {
   // The project comes first: with several windows open, "which repository am I
   // in" is the question the bar answers before "which model".
   const segments: StatusSegment[] = [{ kind: "project", label: ctx.projectName }];
+  // The branch follows the project: together they answer "where am I", and a
+  // session in a worktree needs it — that is the whole point of the worktree.
+  if (ctx.projectBranch) segments.push({ kind: "branch", label: formatBranch(ctx.projectBranch) });
   segments.push({ kind: "model", label: `${ctx.currentProvider}/${ctx.currentModel}` });
   // The set decides the system prompt and the extension list, so its short
   // label sits with the pair it applies to (the header carries the long form).
@@ -228,6 +232,20 @@ export function renderStatus(ctx: ChatContext): void {
   if (usagePart) segments.push({ kind: "usage", label: usagePart });
   ctx.statusSegments = segments;
   ctx.tui.requestRender();
+}
+
+/**
+ * Re-read the branch and repaint the bar when it changed.
+ *
+ * A session outlives a `git switch`: the chip would otherwise keep naming the
+ * branch the window was opened on. Called at the start of a turn, so one `git
+ * rev-parse` per prompt — never per frame.
+ */
+export function refreshBranch(ctx: ChatContext): void {
+  const branch = readGitBranch(ctx.cwd);
+  if (branch === ctx.projectBranch) return;
+  ctx.projectBranch = branch;
+  renderStatus(ctx);
 }
 
 export function renderHeader(ctx: ChatContext): void {

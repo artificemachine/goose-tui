@@ -23,6 +23,7 @@ import {
   closeToolBlocks,
   dropSteer,
   markSteerQueued,
+  refreshBranch,
 } from "./chat-stream";
 import { cancelAllPermissions } from "./chat-handlers";
 import { handleCommand } from "./chat-config";
@@ -305,6 +306,9 @@ export async function submitPrompt(ctx: ChatContext, text: string, attempt = 0):
   // "/recap" and writing prose), the line never appears and nothing used to say
   // so — the turn ended in silence. `finishTurn` reports it.
   if (isRecapCommand(text)) ctx.recapExpected = true;
+  // The branch may have changed since the last turn (`git switch` in another
+  // window); one `rev-parse` per prompt keeps the chip honest.
+  refreshBranch(ctx);
   ctx.busy = true;
   ctx.cancelRequested = false;
   ctx.activeRunId = null;

@@ -9,6 +9,7 @@ import pc, { themeChrome } from "../theme";
 import { userBandBg, userBandFg } from "./section-band";
 
 import { env, formatCharCount, projectNameFromCwd } from "../utils";
+import { readGitBranch } from "../worktree";
 
 import type {
   GooseExtension,
@@ -152,7 +153,7 @@ export interface ExtensionPlanState {
  * found again (tests, future filtering) without matching on its text.
  */
 export interface StatusSegment {
-  kind: "project" | "model" | "set" | "usage";
+  kind: "project" | "branch" | "model" | "set" | "usage";
   label: string;
 }
 
@@ -274,6 +275,8 @@ export interface ChatContext {
    */
   /** The working directory's project, named first in the status line. */
   projectName: string;
+  /** The branch checked out there, when it is a repository. */
+  projectBranch: string | null;
   statusSegments: StatusSegment[];
   headerLine: Text;
   editor: Editor;
@@ -549,6 +552,7 @@ export function createChatContext(opts: AcpChatOptions): ChatContext {
     client: null as unknown as AcpClient,
     cwd: opts.cwd,
     projectName: projectNameFromCwd(opts.cwd),
+    projectBranch: readGitBranch(opts.cwd),
 
     // Prompt handlers
     awaitingRename: false,

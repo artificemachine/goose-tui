@@ -14,6 +14,7 @@ import { Container, Text } from "@earendil-works/pi-tui";
 import { RecapSurface, conversationView } from "../src/acp/chat-ui";
 import { renderStatus } from "../src/acp/chat-stream";
 import { projectNameFromCwd } from "../src/utils";
+import { formatBranch } from "../src/worktree";
 import { RECAP_HINT, RECAP_MAX_ROWS, buildRecapLine } from "../src/acp/recap";
 
 const plain = (rows: string[]) =>
@@ -71,6 +72,7 @@ describe("the status line", () => {
   const ctxOf = (overrides: Record<string, unknown> = {}) =>
     ({
       projectName: "goose-tui",
+      projectBranch: "feat/darwin-release-assets",
       currentProvider: "custom_deepseek",
       currentModel: "deepseek-flash",
       currentSetLabel: "Default",
@@ -83,7 +85,27 @@ describe("the status line", () => {
     const ctx = ctxOf();
     renderStatus(ctx);
     expect(ctx.statusSegments[0]).toEqual({ kind: "project", label: "goose-tui" });
-    expect(ctx.statusSegments.map((s: any) => s.kind)).toEqual(["project", "model", "set"]);
+    expect(ctx.statusSegments.map((s: any) => s.kind)).toEqual(["project", "branch", "model", "set"]);
+  });
+
+  test("the branch follows the project, and is absent outside a repository", () => {
+    const inRepo = ctxOf();
+    renderStatus(inRepo);
+    expect(inRepo.statusSegments[1]).toEqual({ kind: "branch", label: "feat/darwin-release-assets" });
+
+    const noRepo = ctxOf({ projectBranch: null });
+    renderStatus(noRepo);
+    expect(noRepo.statusSegments.map((s: any) => s.kind)).toEqual(["project", "model", "set"]);
+  });
+
+  test("a long branch is elided in the middle, so both ends stay readable", () => {
+    const long = "feature/very-long-branch-name-that-would-eat-the-bar";
+    const shown = formatBranch(long);
+    expect(shown.length).toBeLessThanOrEqual(32);
+    expect(shown.startsWith("feature/")).toBe(true);
+    expect(shown.endsWith("the-bar")).toBe(true);
+    expect(shown).toContain("…");
+    expect(formatBranch("main")).toBe("main");
   });
 
   test("the project name follows the working directory, worktrees included", () => {
