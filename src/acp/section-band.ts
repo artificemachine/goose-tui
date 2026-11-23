@@ -36,7 +36,7 @@ export const USER_BAND_GUTTER = " ";
  * chrome — the retrowave values, so the assertions stay meaningful.
  */
 export function agentBandBg(): string {
-  return bandBackground(themeChrome()?.agentBand ?? "12;12;14");
+  return bandBackground(themeChrome()?.agentBand ?? "34;35;36");
 }
 
 /** Shell band: the rawest output on screen. */
@@ -57,7 +57,7 @@ export function shellBandFg(): string | undefined {
 
 /** Tool band: a tool call must never read as an answer. */
 export function toolBandBg(): string {
-  return bandBackground(themeChrome()?.toolBand ?? "18;42;58");
+  return bandBackground(themeChrome()?.toolBand ?? "21;50;63");
 }
 
 /**

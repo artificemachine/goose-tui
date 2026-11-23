@@ -216,8 +216,12 @@ test("every_chrome_theme_keeps_each_section_on_its_own_colour", () => {
     // message on the mauve one. A theme may change the hue — Monokai's black is
     // warm, its green lime-tinted — but never the slot: switching themes must
     // not re-rank the conversation or turn an answer into the user's band.
+    // Answers are the darkest surface, but "darkest" is not "black": retrowave
+    // lifts them to the owner's dark grey `#222324` (L* 13.7) and keeps the tool
+    // band 5.6 L* above. The cap below is what stops an answer band from becoming
+    // a second tool band (the ladder test enforces the gap itself).
     expectWithin(name, "agentBand saturation", saturation(chrome.agentBand), 0, 20);
-    expectWithin(name, "agentBand lightness", lightness(chrome.agentBand), 0, 7);
+    expectWithin(name, "agentBand lightness", lightness(chrome.agentBand), 0, 15);
 
     expectWithin(name, "toolBand hue", hue(chrome.toolBand), 180, 235);
     expectWithin(name, "toolBand saturation", saturation(chrome.toolBand), 25, 100);
