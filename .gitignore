@@ -2,9 +2,17 @@ node_modules/
 .goose-tui.json
 rossii
 rossii-*-linux-*
+rossii-*-darwin-*
 cgoose
 cgoose-*-linux-*
 ${OUTFILE}
 .worktree/
 .serena/
 .gigacode_vsc/
+
+# Secrets never belong in a public repository (ShipGuard SC-004).
+.env
+*.key
+*.pem
+*.p12
+*.pfx
