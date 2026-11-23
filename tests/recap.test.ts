@@ -103,6 +103,18 @@ describe("the one-line shape", () => {
     expect(line).not.toContain("`");
   });
 
+  test("a body that quotes a fenced recap loses the fence and the nested marker", () => {
+    const line = buildRecapLine(
+      "※ recap: ```\n※ recap: restart confirmé, trois sondes vertes. Next, trancher.\n```",
+    );
+    expect(line).toBe(
+      `※ recap: restart confirmé, trois sondes vertes. Next, trancher. ${RECAP_HINT}`,
+    );
+    expect(line).not.toContain("```");
+    // Exactly one marker: the one this module writes.
+    expect(line.match(/※/g)?.length).toBe(1);
+  });
+
   test("a body that would run for a paragraph is cut at a word, with an ellipsis", () => {
     const line = buildRecapLine(`※ recap: ${"mot ".repeat(80)}`);
     expect(line.length).toBeLessThan(220);

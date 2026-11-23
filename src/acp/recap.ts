@@ -112,9 +112,14 @@ export function buildRecapLine(text: string): string {
   const body = limitBody(
     withoutHint
       .replace(/^\s*※\s*recap\s*:?\s*/i, "")
+      .replace(/```+/g, " ")
       .replace(/\*\*(.+?)\*\*/g, "$1")
       .replace(/`([^`]*)`/g, "$1")
       .replace(/(^|\s)[-•]\s+/g, "$1· ")
+      // A recap that quotes an earlier recap (the model is summarising a
+      // conversation that contains one) keeps the nested marker: strip it, and
+      // keep stripping, so the body never opens on `※ recap:` again.
+      .replace(/^\s*(?:※\s*recap\s*:?\s*)+/i, "")
       .replace(/\s+/g, " ")
       .trim(),
   );
