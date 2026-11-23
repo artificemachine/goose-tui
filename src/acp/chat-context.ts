@@ -5,9 +5,11 @@
  * the same mutable state without closures.
  */
 
-import pc, { getTheme } from "../theme";
+import pc, { themeChrome } from "../theme";
+import { userBandBg, userBandFg } from "./section-band";
 
-import { env, formatCharCount } from "../utils";
+import { env, formatCharCount, projectNameFromCwd } from "../utils";
+import { readGitBranch } from "../worktree";
 
 import type {
   GooseExtension,
@@ -22,8 +24,11 @@ import type { ThoughtBlock } from "./thought";
 import type { ToolCallBlock } from "./tool-call-block";
 import { parseBlockMode, type BlockMode } from "./block-mode";
 import type { GooseCommand } from "./slash-commands";
+import { InputHistory } from "./input-history";
+import { NO_REPORTER, type Reporter } from "../herdr";
 import { buildTimeouts } from "./timeout-state";
 import type { ResolvedTimeout } from "./timeouts";
+import { RECAP_AUTO_DELAY_MS } from "./recap";
 
 // ─── PendingSteer ────────────────────────────────────────────────────────────
 
@@ -81,6 +86,16 @@ export interface AcpChatOptions {
    */
   setKey?: string;
   /** Builtin names resolved from the set + goose config.yaml. */
+  /**
+   * `/recap-config` state for this directory: on routes a `/recap` answer to
+   * the line above the composer, off leaves it in the transcript. Persisted in
+   * the project meta (`recap: { enabled }`).
+   */
+  recapEnabled?: boolean;
+  /** Automatic generation (`/recap-config auto`), default on. */
+  recapAuto?: boolean;
+  /** Idle delay before it, default 30 s. */
+  recapIdleMs?: number;
   agentBuiltins: string[];
   /** Raw stdio extension specs (`[name:]ENV=val cmd args...`) from the set. */
   stdioExtensionSpecs: string[];
@@ -97,6 +112,12 @@ export interface ChatContextOptions {
   agentBuiltins: string[];
   stdioExtensionSpecs: string[];
   httpExtensionUris: string[];
+  /** `/recap-config` state for this project (default: on). */
+  recapEnabled?: boolean;
+  /** `/recap-config auto` state (default: on, like pi). */
+  recapAuto?: boolean;
+  /** Idle delay before an automatic recap (default 30 s). */
+  recapIdleMs?: number;
 }
 
 // ─── SessionConfig (imported shape, re-exported for convenience) ─────────────
@@ -122,6 +143,18 @@ export interface ExtensionPlanState {
   protectedNames: Set<string>;
   /** Problems resolving the set's `extensions:` names against config.yaml. */
   warnings: string[];
+}
+
+// ─── Status bar ──────────────────────────────────────────────────────────────
+
+/**
+ * One chip of the status bar. The kind decides nothing about the colour — the
+ * chip ladder is positional, like the reference HUD — but it lets a segment be
+ * found again (tests, future filtering) without matching on its text.
+ */
+export interface StatusSegment {
+  kind: "project" | "branch" | "model" | "set" | "usage";
+  label: string;
 }
 
 // ─── Permission queue ────────────────────────────────────────────────────────
@@ -188,8 +221,16 @@ export function formatCost(cost: any): string {
 }
 
 export function userMessageLine(text: string): Text {
-  const background = getTheme() === "retrowave" && pc.isColorSupported
-    ? (line: string) => `\x1b[48;2;20;20;20m${line.replace(/\x1b\[(?:0|49)?m/g, (reset) => `${reset}\x1b[48;2;20;20;20m`)}\x1b[49m`
+  // The user's band is light mauve, so it repaints the foreground too: a reset
+  // inside the line (bold off, a coloured span) must not drop back to the
+  // transcript's near-white. The band's foreground is restored after every
+  // reset and both are undone once at the end.
+  const background = themeChrome() !== null && pc.isColorSupported
+    ? (line: string) =>
+        `${userBandFg()}${userBandBg()}${line.replace(
+          /\x1b\[(?:0|39|49)?m/g,
+          (reset) => `${reset}${userBandFg()}${userBandBg()}`,
+        )}\x1b[39m\x1b[49m`
     : undefined;
   return new Text(text, 1, 0, background);
 }
@@ -227,10 +268,69 @@ export interface ChatContext {
   // ── UI components (built by chat-ui.ts) ──
   tui: TUI;
   transcript: Container;
-  statusLine: Text;
+  /**
+   * The status bar's chips, left to right. `renderStatus` rewrites the list on
+   * every change; `StatusSurface` reads it at render time (it is a function, so
+   * a repaint always shows the current chips).
+   */
+  /** The working directory's project, named first in the status line. */
+  projectName: string;
+  /** The branch checked out there, when it is a repository. */
+  projectBranch: string | null;
+  statusSegments: StatusSegment[];
   headerLine: Text;
   editor: Editor;
   loader: Loader;
+
+  /**
+   * The composer's input history for this project: read once at startup and
+   * replayed into the editor (pi-tui's own list is per-instance and empty
+   * because nothing calls `addToHistory()`), then appended to on every submit.
+   * See ./input-history.ts and ../project.ts (`getProjectHistoryPath`).
+   */
+  inputHistory: InputHistory;
+
+  /**
+   * Tells the herdr pane's dot what this session is doing (idle / working /
+   * blocked). A no-op outside a pane — see ../herdr.ts.
+   */
+  herdr: Reporter;
+
+  /**
+   * The recap line shown above the composer (`※ recap: … (disable recaps in
+   * /recap-config)`), or null when there is none yet. goose's `/recap` answer
+   * goes here instead of the transcript: a recap is the state of the session,
+   * not a contribution to it, and it stays on screen while the conversation
+   * scrolls. See ./recap.ts and `RecapSurface` in chat-ui.ts.
+   */
+  recapLine: string | null;
+  /**
+   * Whether a recap answer is routed to that line. Off (`/recap-config off`)
+   * leaves `/recap` working — its answer simply stays in the transcript.
+   */
+  recapEnabled: boolean;
+  /** `/recap-config auto on|off` — generate a recap after a turn, unprompted. */
+  recapAuto: boolean;
+  /** Idle delay before that automatic recap (`/recap-config auto 2m`); 0 = never. */
+  recapIdleMs: number;
+  /** User turns at the moment of the last recap — pi's `neverTwiceInARow`. */
+  lastRecapTurn: number;
+  /** The pending automatic-recap timer, if one is armed (`finishTurn` arms it). */
+  recapTimer: ReturnType<typeof setTimeout> | null;
+  /**
+   * Send the next prompt without echoing it (`❯ /recap`) and without opening a
+   * turn: a recap is not something the user said, and its output is the line
+   * above the composer.
+   */
+  quietPrompt: boolean;
+  /** Message id of the recap being streamed, so its later chunks append to the line. */
+  /** A `/recap` is in flight: its answer must be the command's marker. */
+  recapExpected: boolean;
+  /** `/recap` came back as prose: the command was not dispatched. */
+  recapAsPrompt: boolean;
+  recapMessageId: string | null;
+  /** Text accumulated for that message; `recapLine` is rebuilt from it. */
+  recapText: string;
 
   // ── Streaming state ──
   currentMd: Markdown | null;
@@ -380,10 +480,23 @@ export function createChatContext(opts: AcpChatOptions): ChatContext {
     // UI (placeholders — chat-ui.ts fills these in before anything renders)
     tui: null as unknown as TUI,
     transcript: null as unknown as Container,
-    statusLine: null as unknown as Text,
+    statusSegments: [],
     headerLine: null as unknown as Text,
     editor: null as unknown as Editor,
     loader: null as unknown as Loader,
+    inputHistory: new InputHistory(),
+    herdr: NO_REPORTER,
+    recapLine: null,
+    recapEnabled: opts.recapEnabled ?? true,
+    recapAuto: opts.recapAuto ?? true,
+    recapIdleMs: opts.recapIdleMs ?? RECAP_AUTO_DELAY_MS,
+    recapExpected: false,
+    recapAsPrompt: false,
+    recapMessageId: null,
+    recapText: "",
+    lastRecapTurn: 0,
+    recapTimer: null,
+    quietPrompt: false,
 
     // Streaming (initialized by chat-stream.ts)
     currentMd: null,
@@ -438,6 +551,8 @@ export function createChatContext(opts: AcpChatOptions): ChatContext {
     // ACP client (set by chat.ts)
     client: null as unknown as AcpClient,
     cwd: opts.cwd,
+    projectName: projectNameFromCwd(opts.cwd),
+    projectBranch: readGitBranch(opts.cwd),
 
     // Prompt handlers
     awaitingRename: false,

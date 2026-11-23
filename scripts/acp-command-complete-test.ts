@@ -116,17 +116,19 @@ ok("`/` offers everything, chat's first", () => {
 });
 
 ok("typing narrows by prefix, then by substring", () => {
-  assert.deepEqual(namesFor("/co"), ["config", "compact"]);
+  // `recap-config` also contains "co"… as a substring, so it follows the two
+  // prefix matches rather than sitting among them.
+  assert.deepEqual(namesFor("/co"), ["config", "compact", "recap-config"]);
   // `clear` has the prefix; `doctor` only contains it — later, never mixed in.
   assert.deepEqual(namesFor("/cl"), ["clear"]);
   assert.deepEqual(namesFor("/do"), ["doctor"]);
   // A one-letter query still lists the prefix matches first; `fetch` and
   // `doctor` merely contain the letter.
-  assert.deepEqual(namesFor("/c"), ["config", "compact", "clear", "fetch", "doctor"]);
+  assert.deepEqual(namesFor("/c"), ["config", "compact", "clear", "recap-config", "fetch", "doctor"]);
 });
 
 ok("matching is case-insensitive and the prefix is what was typed", () => {
-  assert.deepEqual(namesFor("/CO"), ["config", "compact"]);
+  assert.deepEqual(namesFor("/CO"), ["config", "compact", "recap-config"]);
   // The prefix keeps the case and the slash: it is a slice of the line, and
   // `applyCompletion` measures the token by its length.
   assert.equal(commandSuggestions("/Co", ITEMS)?.prefix, "/Co");

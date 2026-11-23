@@ -1,7 +1,7 @@
 # SPEC-004: Interrupting and leaving the chat
 
 Status: draft
-Last reviewed: 2026-11-20
+Last reviewed: 2026-11-23
 Affected paths: src/acp/chat-ui.ts, src/acp/chat-config.ts
 
 Esc is the "stop" key and Ctrl+C is the "leave" key. They used to overlap: with

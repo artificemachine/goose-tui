@@ -15,6 +15,7 @@ import pc from "../theme";
 import { journalError } from "../journal";
 import { Text } from "@earendil-works/pi-tui";
 import { planSteer, classifySteerError } from "./steer";
+import { isRecapCommand } from "./recap";
 import {
   closeThought,
   closeMessage,
@@ -22,12 +23,17 @@ import {
   closeToolBlocks,
   dropSteer,
   markSteerQueued,
+  refreshBranch,
 } from "./chat-stream";
 import { cancelAllPermissions } from "./chat-handlers";
 import { handleCommand } from "./chat-config";
 import { renameCurrentSession } from "./chat-session";
 import { beginTurn } from "./turn-separator";
 import { steerSession } from "./custom";
+import { appendInputHistory } from "./input-history";
+import { getProjectHistoryPath } from "../project";
+import { TURN_STATE } from "../herdr";
+import { armAutoRecap, cancelAutoRecap } from "./recap-auto";
 import { userMessageLine, type ChatContext, type PendingSteer } from "./chat-context";
 import type { PromptResponse } from "./types";
 
@@ -95,6 +101,7 @@ export async function promptInEditor(ctx: ChatContext): Promise<void> {
     return;
   }
   ctx.editor.setText("");
+  recordInput(ctx, text);
   dispatchPrompt(ctx, text);
 }
 
@@ -128,12 +135,31 @@ export function attachEditorSubmit(ctx: ChatContext): void {
       ctx.tui.requestRender();
       return;
     }
+    // Past the guards, so a title, a refused send or a dead agent never lands in
+    // the history. Commands are recorded too: a shell remembers them.
+    recordInput(ctx, text);
     if (text.startsWith("/")) {
       void handleCommand(ctx, text);
       return;
     }
     dispatchPrompt(ctx, text);
   };
+}
+
+/**
+ * Remember a submitted line the way a shell does.
+ *
+ * Three places, one decision: the editor's own list (what ↑/↓ browses), the
+ * project history (what the grey suggestion and, later, Ctrl+R read) and the
+ * file. `HIST_IGNORE_SPACE` applies — a leading space keeps a one-off out of
+ * the record. Recording is best-effort: a read-only config dir costs the
+ * history, never the prompt.
+ */
+function recordInput(ctx: ChatContext, text: string): void {
+  ctx.editor.addToHistory(text);
+  if (ctx.inputHistory.record(text, { ignoreInitialSpace: true })) {
+    appendInputHistory(getProjectHistoryPath(), text);
+  }
 }
 
 /**
@@ -230,25 +256,65 @@ export function finishTurn(ctx: ChatContext, turnError?: string): void {
   closeMessage(ctx);
   closeToolBlocks(ctx);
   abandonPendingSteers(ctx, "steer not delivered (the turn ended)");
+  ctx.herdr.report(TURN_STATE.end);
   if (turnError) journalError("chat.turn", turnError);
   if (turnError && !ctx.agentDead) {
     ctx.transcript.addChild(new Text(pc.red(`⚠ ${turnError}`), 1, 0));
   }
   ctx.tui.requestRender();
+  ctx.recapExpected = false;
+  if (ctx.recapAsPrompt) {
+    ctx.recapAsPrompt = false;
+    ctx.transcript.addChild(new Text(
+      pc.yellow("⚠ /recap came back as an ordinary message: goose ran it as a prompt, not as the command, so there is no recap line."),
+      1, 0,
+    ));
+  }
   const queued = ctx.pendingPrompt;
   ctx.pendingPrompt = null;
-  if (queued) void submitPrompt(ctx, queued);
+  if (queued) {
+    void submitPrompt(ctx, queued);
+    return;
+  }
+  // pi arms its recap timer at `agent_end`; this is the same moment. An errored
+  // turn arms nothing (see `armAutoRecap`).
+  if (!turnError) armAutoRecap(ctx);
 }
 
 // ─── Submit prompt ───────────────────────────────────────────────────────────
 
 export async function submitPrompt(ctx: ChatContext, text: string, attempt = 0): Promise<void> {
-  if (!ctx.sessionId || ctx.busy) return;
+  if (!ctx.sessionId) return;
+  if (ctx.busy) {
+    // A second `session/prompt` while a turn runs is refused by goose. A quiet
+    // recap is simply dropped (the next turn end arms another), but anything
+    // the user typed is queued: it used to vanish without a word, which is how
+    // a `/compact` sent mid-turn disappeared.
+    if (!ctx.quietPrompt) queuePrompt(ctx, text);
+    ctx.quietPrompt = false;
+    return;
+  }
+  // Any turn cancels a pending automatic recap (pi cancels on `agent_start`).
+  cancelAutoRecap(ctx);
+  // A recap request is not something the user said: `/recap` (typed or fired by
+  // the idle timer) is sent without the `❯ /recap` echo and without opening a
+  // turn — its answer is the line above the composer, not a transcript entry.
+  const quiet = ctx.quietPrompt;
+  ctx.quietPrompt = false;
+  // A `/recap` we send is a command, so its answer has to be the marker. When
+  // goose answers it as a prompt instead (seen live: the model reading
+  // "/recap" and writing prose), the line never appears and nothing used to say
+  // so — the turn ended in silence. `finishTurn` reports it.
+  if (isRecapCommand(text)) ctx.recapExpected = true;
+  // The branch may have changed since the last turn (`git switch` in another
+  // window); one `rev-parse` per prompt keeps the chip honest.
+  refreshBranch(ctx);
   ctx.busy = true;
   ctx.cancelRequested = false;
   ctx.activeRunId = null;
   ctx.lastAgentActivity = Date.now();
-  if (attempt === 0) {
+  ctx.herdr.report(TURN_STATE.start);
+  if (attempt === 0 && !quiet) {
     // The dashed rule that closes the previous exchange, then this question.
     beginTurn(ctx);
     ctx.transcript.addChild(userMessageLine(pc.bold(`❯ ${text}`)));

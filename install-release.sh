@@ -24,7 +24,7 @@
 
 set -eu
 
-REPO="${ROSSII_REPO:-viorn/rossii}"
+REPO="${ROSSII_REPO:-artificemachine/goose-tui}"
 INSTALL_DIR="${ROSSII_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${ROSSII_VERSION:-}"
 CHECKSUM=1
@@ -103,9 +103,17 @@ detect_arch() {
 OS="${ROSSII_OS:-$(detect_os)}"
 ARCH="${ROSSII_ARCH:-$(detect_arch)}"
 
-if [ "$OS" != "linux" ]; then
-  die "no $OS build is published (releases carry linux-x86_64 only) — build from source instead:
-       git clone https://github.com/$REPO && cd rossii && bash build.sh"
+case "$OS" in
+  linux|darwin) ;;
+  *) die "no $OS build is published (releases carry linux-x86_64 and darwin-arm64) — build from source instead:
+       git clone https://github.com/$REPO && bash build.sh" ;;
+esac
+
+# Only Apple silicon macOS is built; Intel macOS and ARM Linux stay on
+# build-from-source, and saying so beats a 404 on the asset.
+if [ "$OS" = "darwin" ] && [ "$ARCH" != "arm64" ]; then
+  die "no darwin-$ARCH build is published (Apple silicon only) — build from source instead:
+       git clone https://github.com/$REPO && bash build.sh"
 fi
 
 if [ "$ARCH" = "unknown" ]; then
@@ -217,8 +225,16 @@ if [ "$CHECKSUM" = 1 ]; then
   fi
 fi
 
+# macOS ships `shasum -a 256` instead of `sha256sum`; both print
+# "<hash>  <file>", so one parse covers both.
+actual=""
 if have sha256sum; then
   actual="$(sha256sum "$TMP/$ASSET" | awk '{ print $1 }')"
+elif have shasum; then
+  actual="$(shasum -a 256 "$TMP/$ASSET" | awk '{ print $1 }')"
+fi
+
+if [ -n "$actual" ]; then
   if [ -n "$expected" ]; then
     [ "$actual" = "$expected" ] || die "SHA-256 mismatch for $ASSET
        expected $expected
@@ -229,7 +245,7 @@ if have sha256sum; then
     warn "sha256 of the downloaded file: $actual"
   fi
 elif [ -n "$expected" ]; then
-  warn "sha256sum not available — cannot verify the download"
+  warn "no sha256sum or shasum — cannot verify the download"
 fi
 
 # ─── install ─────────────────────────────────────────────────────────────────

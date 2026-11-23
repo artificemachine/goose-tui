@@ -16,3 +16,7 @@ ${OUTFILE}
 *.pem
 *.p12
 *.pfx
+
+# Tool state and generated reports, never part of the source.
+.reports/
+.shipguard/

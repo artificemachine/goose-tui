@@ -84,7 +84,9 @@ toolMs: 1800000                                     # optional default for the t
 - Classic mode launches any set (and `None`) with `--no-profile`: only what the set lists is loaded
 - Chat mode has no `--no-profile` flag, but `_meta.enabledExtensions` (typed `GooseExtension[]`)
   **replaces** the profile's list, so the same semantics hold; an empty array means "no extensions"
-  (goose keeps its implicit `developer`). See the chat-mode section below
+  — measured on goose 1.60.0, a session created with `[]` reports **nothing at all**, `developer`
+  included (`docs/BUG-acp-session-extensions-20261123.md`), which is why the chat warns when a
+  session has no file/shell tools. See the chat-mode section below
 - Created/managed via the TUI: **Set → ⚙️ Create new set...** / **Manage sets...**, or manually in `~/.config/rossii/sets/`
 
 ### "None" vs "Default" vs a set
@@ -144,7 +146,10 @@ warns in the TUI and keeps the ACP default.
   the Enter decision, pure and unit-tested), `slash-commands.ts` (which `/…` is the chat's
   and which is goose's, plus the command list goose announces, pure and unit-tested),
   `command-complete.ts` (the composer's `/…` completion menu: the chat's commands plus
-  goose's announced ones, pure and unit-tested),
+  goose's announced ones, pure and unit-tested), `input-history.ts` (the composer's
+  input history: recording rules, ↑/↓ navigation, Ctrl+R search, the JSONL file, pure
+  and unit-tested), `autosuggest.ts` (the inline grey suggestion — the decision only,
+  pure and unit-tested),
   `model-options.ts` (the model menu's entries: goose's `configOptions.model.options`
   unioned with the custom provider's own JSON — goose's registry only reloads such a file
   on provider create/update/delete, so a model written by `/model fetch` would otherwise
@@ -173,6 +178,11 @@ warns in the TUI and keeps the ACP default.
   transcript back to the normal screen, so scrollback keeps the conversation.
   `ROSSII_CHAT_MAIN_SCREEN=1` switches back to `TuiMainScreen` (inline; the terminal owns
   scrollback, so any repaint — spinner, streamed chunk — pulls the view to the bottom)
+- The conversation surface is **frameless**: `conversationView(document)` (`src/acp/chat-ui.ts`)
+  is a bare `ScrollView` — no `╭╮╰╯`, no side `│`, no `renderLayoutFrame` around the transcript.
+  The section bands already close each block, the composer draws its own rules (horizontal only)
+  and the status strip closes the screen, so the box only cost two columns of width and two rows
+  of height on every themed surface. Nothing paints a frame for any theme, `default` included
 - Turn separator (`src/acp/turn-separator.ts`, unit-tested): `beginTurn(ctx)` draws a dim dashed
   rule (`┈` × width, 256-colour 242, one-column indent) before every turn after the first and bumps
   `ctx.turnsStarted`. Called from `submitPrompt` (live, next to the `❯ …` echo) and from the
@@ -317,6 +327,119 @@ warns in the TUI and keeps the ACP default.
   condition for a slash command), Tab applies without submitting. Matching is
   prefix-then-substring, case-insensitive, names only: `/model ` (with a space) closes the
   menu. Nothing is gated by it — it is a shortcut for typing, not a filter
+- **Input history and autosuggestion** — the composer behaves like a shell
+  (`src/acp/input-history.ts`, `src/acp/autosuggest.ts`, wired in `chat-ui.ts` and
+  `chat-io.ts`). pi-tui's `Editor` already browses history with ↑/↓, but its list lives
+  in the instance and **nothing ever called `addToHistory()`**, so both arrows were dead:
+  `setupUi` replays the project's file oldest-first (the editor keeps the newest 100), and
+  `recordInput()` in `chat-io.ts` appends every submitted line — prompts, commands and
+  steers — to the editor, to the in-memory history and to
+  `<config>/projects/<dir>-<hash>.history.jsonl` (one JSON string per line, so a quoted
+  multi-line prompt survives as one entry). Rules follow zsh: blanks dropped, consecutive
+  duplicates dropped, `HIST_IGNORE_SPACE` (a leading space keeps a one-off out), cap at
+  1000 in memory with the file compacted on the next load. The grey suggestion is the
+  suffix of the newest history entry that starts with the draft: only when the cursor is
+  at the end (`cursorAtEnd`), never while the `/…` menu is open (`capturesViewportInput`),
+  and it is painted right after the editor's fake cursor by `PromptEditor.render()` —
+  measured on the draft, because the editor pads every content line to the full width.
+  It is a separate mechanism from the `/…` menu on purpose: the menu is a navigable list
+  applied with Tab/Enter, the suggestion is silent, comes from your own history, and
+  Right/End accept it (`acceptSuggestion()` in `PromptEditor`, declined while the menu
+  is open). `ROSSII_ACP_HISTORY=0` is *not* a setting: the only switch is the file itself
+- **Themes** — `src/theme.ts` holds two things, and they are separate on purpose.
+  `THEMES` is the palette: six slots (`red green yellow blue magenta cyan`), which
+  `/theme <name>` swaps into a copy of picocolors (`setTheme`). `CHROME` is
+  everything the palette cannot express — the section bands (agent/tool/shell/user),
+  the composer surface (`stylePrompt`) and the status strip — read through
+  `themeChrome()`, which returns null for a theme with no chrome (`default`,
+  `dracula`, `nord`, `light`). A theme is in `CHROME` or it paints no bands at all;
+  `bandsEnabled()` reads it. Adding a themed
+  variant means adding a `CHROME` entry with the **same band structure** as
+  `retrowave` — three dark steps (one black, one blue, one green or neutral) and
+  one light user band — so contrast never depends on the theme; the *order* is the
+  theme's own, and only the hue changes. `retrowave` answers on black and gives the
+  green band to the shell; `monokai` answers on a neutral `#404040`; both keep the
+  blue tool band and the mauve user band. Band colours are read at render time, so
+  `/theme` applies to the next block without a restart; blocks already on screen
+  keep theirs
+- **Recap line** — goose's `/recap` answer is not an answer: it is the state of the
+  session, so it goes to a muted line **above the composer**, the way `pi-recap`'s widget
+  (`aboveEditor`) draws it. `src/acp/recap.ts` is the pure half (`isRecapText` recognises
+  the `※ recap:` marker goose emits — a leading `\n\n` and a chunk that stops inside the
+  marker both count, a lone `※` does not; `buildRecapLine` bends it into
+  `※ recap: <body> (disable recaps in /recap-config)`, collapsing newlines, flattening
+  markdown (`**bold**`, backticks, bullets → `·` — a row of text is not a document) and
+  never doubling a hint that is already there, with the body capped at `RECAP_BODY_MAX`
+  (150 columns, cut at a word and marked `…`); `wrapRecapLine` wraps on spaces with one
+  column of left padding, breaking an over-long word rather than painting past the edge,
+  and stops at `RECAP_MAX_ROWS` = **2** rows — the line sits above the composer, where a
+  paragraph is not a glance; the second row is cut to leave room for the hint, so a
+  truncated recap still says how to turn itself off;
+  `parseRecapConfigCommand`), `RecapSurface` in `chat-ui.ts` renders it (first row of the
+  composer stack, above the editor; a null line is one empty row, so the composer never
+  jumps), and `handleSessionUpdate` does the routing: when an `agent_message_chunk`
+  opens with the marker, `ctx.recapLine` is set and **no answer block is created**; the
+  message's later chunks append to the line, `ctx.currentMessageId` is remembered as the
+  open one so the new-message guard does not close it, and `closeMessage` drops only the
+  streaming target (the line stays — that is the point). `/recap-config [on|off|toggle|auto …]`
+  (`chat-config.ts`) sets it and saves it per directory (`recap: { enabled, auto, idleMs }` in
+  the project meta, `readProjectRecap`/`writeProjectRecap` — a merge, so setting one facet
+  never resets another; `writeProjectMeta` carries the key over). It is **on and automatic by
+  default**, like pi: only an explicit `false` turns something off, and a missing, unreadable
+  or key-less meta keeps the defaults (`scripts/project-recap-test.ts` pins that, in a process
+  that has never seen a real projects directory). Off leaves `/recap` working — its answer
+  simply stays in the transcript.
+- **Automatic recaps** — pi's `scheduleAutoRecap`, on goose's command: `armAutoRecap`
+  (`src/acp/recap-auto.ts`) is called by `finishTurn` (pi arms at `agent_end`), cancelled by
+  `submitPrompt`, `submitSteer`, `/recap-config off`, `/recap-config auto off` and
+  `shutdown`, and when it fires it sends the command **quietly** — `submitQuietRecap` sets
+  `ctx.quietPrompt`, which `submitPrompt` consumes to skip the `❯ /recap` echo and the turn
+  rule, so the only visible result is the line. The decision is the pure `shouldAutoRecap`
+  (`./recap.ts`): enabled, automatic, no running turn, no open permission, no draft in the
+  composer, at least `RECAP_MIN_TURNS` (3) turns, and at least one turn since the last recap
+  (`lastRecapTurn` = `ctx.turnsStarted` when a recap is routed — pi's `neverTwiceInARow`).
+  An errored turn arms nothing. The delay is `recapIdleMs` (default 30 s,
+  `/recap-config auto 2m`, `0` = never). A replayed `/recap` user message is not rendered
+  when recaps are on: nobody typed it in the transcript's story, the line is what it produced
+  (`tests/recap-auto.test.ts` covers arm/cancel/fire and the guards, on the real 1 s floor). The
+  command is never intercepted: `/recap` is goose's. The line is cleared by a session
+  switch (`resetTranscript`), and restored from a replayed history because the replay goes
+  through the same chunk handler
+- **Status bar** — a HUD, not a band: `StatusSurface` (`src/acp/chat-ui.ts`) draws
+  a row of slanted chips the way `pi-bar` draws pi's footer — `\ue0ba` before the
+  label painted as a *foreground*, `\ue0bc` after it, every body closed with a
+  full `\x1b[0m`, so the bar paints **no background at all** and the terminal shows
+  through (there is no `statusBg` in `ThemeChrome`; a Nerd Font is required and a
+  terminal without one shows two box glyphs). The chips' colours are **not** the
+  theme's: `STATUS_CHIPS` is the reference HUD's neutral grey ladder
+  (`#303030`, `#555555`, `#626262`, `#414141` — the third one a shade below the
+  reference's `#707070`, because at L\* 47 a theme's near-white text reads at
+  3.8:1), so the bar looks the same in every theme and only the text takes the
+  theme's colour (`statusFg`). A new theme needs no work here. The label of each chip is text, so
+  `renderStatus` (`chat-stream.ts`) publishes segments (`ctx.statusSegments`,
+  project / branch / model / set / usage) rather than one pre-joined dim string, and a narrow terminal
+  drops the chips that no longer fit instead of overflowing. The project comes first
+  (`projectNameFromCwd`, a worktree resolving to its repository), the branch next
+  (`readGitBranch`, re-read at the start of each turn, so a `git switch` elsewhere
+  is not stale; `formatBranch` elides past 32 columns in the middle), and the model
+  chip names **only** the model — `custom_deepseek/deepseek-flash` spent fifteen
+  columns on a provider that changes nothing about the answer, and the header
+  still carries the pair. `tests/surfaces.test.ts` pins the order, the labels and
+  the elision.
+- **herdr** — `src/herdr.ts` reports this session's state to the pane's left-menu
+  dot, the same shape as `pi-agent`'s `extensions/herdr-selfreport.ts` (itself
+  lifted from AndrewJacop/pi-herdr, MIT): `isEnabled(env)` requires
+  `HERDR_PANE_ID` **and** `HERDR_ENV=1` (`ROSSII_HERDR_NO_SELF_REPORT=1` disables,
+  `ROSSII_HERDR_AGENT_LABEL` renames), `buildArgs` is the pure
+  `herdr pane report-agent <pane> --source goose-tui --agent … --state …
+  --seq …` argv, and `makeReporter` fires the spawn without awaiting it and
+  swallows every failure, so a missing or hung binary cannot slow a turn. The seq
+  starts at `Date.now()` so it keeps growing across restarts inside one pane
+  (a low seq looks stale to herdr), and a repeated state is dropped. The chat
+  reports through `ctx.herdr` with `TURN_STATE`: `working` from `submitPrompt`,
+  `blocked` when a permission overlay opens (that is the one moment a human is
+  needed — the red dot), back to `working` when it is answered, and `idle` from
+  `finishTurn`, `onAgentExit` and `shutdown`
 - **Live configuration** — no restart: slash commands typed into the composer
   (`/config`, `/provider`, `/model`, `/set`, `/session`, `/rename`, `/fork`, `/think`, `/tool`, `/effort`) plus `SelectList`
   overlays. `showMenu()` refuses to stack a menu on a permission prompt or another menu:
@@ -339,7 +462,8 @@ warns in the TUI and keeps the ACP default.
     `_goose/unstable/session/extensions/{list,add,remove}`, driven by `planForSet()`:
     `buildExtensionArgs` resolves the set's `extensions:` names exactly like the launcher, so
     the live list equals what a new session would get. Default switches to the profile built
-    from config.yaml, None empties the list (goose keeps its implicit `developer`). Verified
+    from config.yaml, None empties the list (on 1.60.0: nothing at all, `developer` included —
+    the chat warns about it). Verified
     live: A→B added/removed builtins, Default added `scheduler` (hidden from the config RPC),
     None removed everything, a stdio set added `echo-mcp`
   - session → `session/load`, then the current provider/model pair is re-applied and the set is
@@ -369,12 +493,17 @@ warns in the TUI and keeps the ACP default.
     unit-tested) draws a titled box around the SelectList; long lists use `SearchableList`,
     which adds a filter line and matches by **substring** (the stock `setFilter` is
     prefix-only, useless for 700 model ids) while forwarding arrows/Enter/Esc
-  - `/edit` (Ctrl+E) suspends the renderer with `tui.stop({ preserveScreen: true })`, runs
+  - `/edit` (no shortcut — see the note on Ctrl+E below) suspends the renderer with
+    `tui.stop({ preserveScreen: true })`, runs
     `$VISUAL`/`$EDITOR`/`vi` on the real terminal via `sh -c '<editor> "$1"'` with the composer's
     draft as the buffer, then `tui.start()` takes the chat back; a clean exit sends the file's
     content through the normal `submitPrompt()`, a non-zero exit sends nothing
   - Ctrl+P opens `/config` (alias `/settings`), Ctrl+O opens `/model`. **Ctrl+M is Enter** (CR is
     the Ctrl+M control character), so it cannot be a shortcut — it would fire on every prompt
+  - **Ctrl+E is not a shortcut either**: a macOS terminal sends `^E` for `⌘→` (the end-of-line key),
+    so the old `/edit` binding opened `$EDITOR` in the middle of navigating the composer. The feature
+    stays, the key is the terminal's again (`scripts/acp-esc-key-test.ts` pins that the listener
+    leaves it alone)
   - rename → `_goose/unstable/session/rename`; a bare `/rename` (or the menu entry) asks the
     composer for the title, Esc cancels without exiting
   - fork → `session/fork` (returns a new session id; probe `scripts/acp-fork-probe.ts`), the
@@ -464,8 +593,16 @@ warns in the TUI and keeps the ACP default.
   binary, the reader opens the DB read-only, and `usage_ledger` is skipped when an older
   goose did not create it. Diagnostics live in `rossii doctor` (`src/doctor.ts`);
   `rossii --version` / `--help` and `rossii update` are handled before the TUI starts
-- Verification scripts: `bun run test` (unit tests for `extensions.ts`, `session-meta.ts`,
+- Verification scripts: `bun scripts/acp-recap-probe.ts` and
+  `bun scripts/acp-recap-auto-probe.ts` prove the recap end to end against a real agent —
+  goose dispatching `/recap` (both halves hidden from the agent, no turn-context injected, so
+  it is the command and not the model imitating it), and the automatic timer firing, routing
+  to the line and leaving the transcript untouched. Point them at a build from source with
+  `ROSSII_GOOSE_BIN=/path/to/goose` (the chat reads the same variable); an installed goose
+  older than the port answers `/recap` as plain text, which looks like a recap and is not one.
+  `bun run test` (unit tests for `extensions.ts`, `session-meta.ts`,
   `session-config.ts`, `steer.ts`, `slash-commands.ts`, `command-complete.ts`,
+  `input-history.ts`, `autosuggest.ts`,
   `model-options.ts`, the overlay components, the tool-call block + its
   `tool-call-content.ts` wire mapping, the streaming renderer (`scripts/acp-stream-test.ts`),
   the db-backed session listing, and

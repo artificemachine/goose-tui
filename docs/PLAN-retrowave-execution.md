@@ -1,0 +1,9 @@
+# Retrowave execution record
+
+- Plan: `docs/PLAN-retrowave.md`, iteration 1, in-session (one ready slice); base/current revision `71390ffea4db0dfa1ec092bd3fa18a6d57aab6a9`, branch `feat/themes`. Existing dirty work preserved; no commit authorized.
+- RED: `bun run test:theme` failed at `retrowave selection persists` (`false !== true`). `bun scripts/theme-surface-test.ts` failed because `PromptEditor` was not yet implemented (`TypeError: undefined is not a constructor`). These were intentional pre-implementation failures.
+- GREEN: `bun run test:theme && bun scripts/theme-surface-test.ts` passed; repeated in the full validation and individually. The test uses a synthetic pi-tui editor, not a live terminal.
+- Validation failure: `bun run test` stopped in `scripts/worktree-test.ts` at `git commit -qm init`: `[BLOCKED] Direct commits to 'main' are not allowed.` The guard was not bypassed. Tests after this point were run separately: `bun scripts/update-test.ts && bun scripts/acp-stream-test.ts && bun scripts/acp-turn-separator-test.ts && bun scripts/theme-test.ts && bun scripts/theme-surface-test.ts` passed.
+- LSP check of four changed TypeScript files: three pre-existing `require-safety-comment-for-as-unknown-as` findings in `src/acp/chat-ui.ts`; three files inconclusive. `git diff --check` passed.
+- Modified for this slice: `src/theme.ts`, `src/acp/chat-ui.ts`, `scripts/theme-test.ts`, `scripts/theme-surface-test.ts`, `README.md`, `docs/PLAN-retrowave.md` and this record. Manual isolated terminal E2E, actual `/theme` command dispatch and renderer focus/IME/mouse interaction were not verified; full suite remains blocked as above. Surface test is not yet included in `bun run test`.
+- Time: active work began before the first preserved 12:35:16 timestamp; latest check 12:38:01 CET. Exact elapsed time across compaction was not recorded. No commit, deployment or publication.

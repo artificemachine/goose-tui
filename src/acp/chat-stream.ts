@@ -17,7 +17,10 @@ import { parseToolCommand } from "./tool-call-block";
 import { toolCallPayload, toolDetailFromRawInput } from "./tool-call-content";
 import { parseAvailableCommands } from "./slash-commands";
 import { beginTurn } from "./turn-separator";
+import { buildRecapLine, classifyRecapHead, isRecapCommand } from "./recap";
 import { answerLabel, formatCost, markdownTheme, userMessageLine } from "./chat-context";
+import type { StatusSegment } from "./chat-context";
+import { formatBranch, readGitBranch } from "../worktree";
 import { SectionBand } from "./section-band";
 import type { ChatContext } from "./chat-context";
 import type { SessionNotification } from "./types";
@@ -66,6 +69,16 @@ export function closeUser(ctx: ChatContext): void {
 }
 
 /** Close the current agent message block (a tool call splits the answer). */
+/**
+ * Stop appending to the recap line. The line itself stays on screen (that is
+ * the point of the surface) — only the streaming target is dropped, so the next
+ * message is routed normally.
+ */
+export function closeRecap(ctx: ChatContext): void {
+  ctx.recapMessageId = null;
+  ctx.recapText = "";
+}
+
 export function closeMessage(ctx: ChatContext): void {
   if (ctx.currentMd) {
     flushStream(ctx, true);
@@ -76,6 +89,7 @@ export function closeMessage(ctx: ChatContext): void {
   ctx.answerChars = 0;
   ctx.pendingAnswer = "";
   ctx.currentMessageId = null;
+  closeRecap(ctx);
 }
 
 /**
@@ -103,6 +117,11 @@ export function resetTranscript(ctx: ChatContext): void {
   ctx.thoughtBlocks = [];
   ctx.toolCallBlocks.clear();
   ctx.turnsStarted = 0;
+  // A session switch starts from nothing: the previous session's recap is not
+  // this one's state.
+  closeRecap(ctx);
+  ctx.recapLine = null;
+  ctx.lastRecapTurn = 0;
   // Steers belong to a turn of the previous conversation; a switch refuses
   // while a turn runs, so nothing live is here — drop the residue.
   ctx.steerEntries.splice(0);
@@ -196,22 +215,40 @@ export function dropSteer(ctx: ChatContext, entry: (typeof ctx.steerEntries)[num
 
 let usagePart = "";
 
-// Status line: provider/model + token usage (kept as parts so usage updates
-// never wipe the model info).
+// Status bar: provider/model + the set + token usage, as the chips of the HUD
+// strip (see `StatusSurface`). Rebuilt as a whole on every change, so a usage
+// update never wipes the model chip.
 export function renderStatus(ctx: ChatContext): void {
+  // The project comes first: with several windows open, "which repository am I
+  // in" is the question the bar answers before "which model".
+  const segments: StatusSegment[] = [{ kind: "project", label: ctx.projectName }];
+  // The branch follows the project: together they answer "where am I", and a
+  // session in a worktree needs it — that is the whole point of the worktree.
+  if (ctx.projectBranch) segments.push({ kind: "branch", label: formatBranch(ctx.projectBranch) });
+  // The model alone: on a narrow bar `custom_deepseek/deepseek-flash` spends
+  // fifteen columns on the provider half, and the provider does not change the
+  // answer — the header still carries the pair for when it matters.
+  segments.push({ kind: "model", label: ctx.currentModel });
   // The set decides the system prompt and the extension list, so its short
   // label sits with the pair it applies to (the header carries the long form).
-  const setPart = ctx.currentSetLabel ? `set: ${ctx.currentSetLabel}` : "";
-  ctx.statusLine.setText(
-    [
-      pc.dim(`${ctx.currentProvider}/${ctx.currentModel}`),
-      setPart ? pc.dim(setPart) : "",
-      usagePart ? pc.dim(usagePart) : "",
-    ]
-      .filter(Boolean)
-      .join(pc.dim("  ")),
-  );
+  if (ctx.currentSetLabel) segments.push({ kind: "set", label: `set: ${ctx.currentSetLabel}` });
+  if (usagePart) segments.push({ kind: "usage", label: usagePart });
+  ctx.statusSegments = segments;
   ctx.tui.requestRender();
+}
+
+/**
+ * Re-read the branch and repaint the bar when it changed.
+ *
+ * A session outlives a `git switch`: the chip would otherwise keep naming the
+ * branch the window was opened on. Called at the start of a turn, so one `git
+ * rev-parse` per prompt — never per frame.
+ */
+export function refreshBranch(ctx: ChatContext): void {
+  const branch = readGitBranch(ctx.cwd);
+  if (branch === ctx.projectBranch) return;
+  ctx.projectBranch = branch;
+  renderStatus(ctx);
 }
 
 export function renderHeader(ctx: ChatContext): void {
@@ -240,6 +277,53 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
         if (messageId) ctx.currentMessageId = messageId;
 
         let text = String(update.content.text ?? "");
+        // A recap (`※ recap: …`, goose's /recap) belongs on the surface above
+        // the composer, not in the transcript: it is the state of the session,
+        // and leaving it as an answer block makes it read like a contribution.
+        // Its later chunks append to the same line, until another message
+        // starts (a new messageId) or the turn ends.
+        if (ctx.recapEnabled && ctx.recapMessageId !== null) {
+          if (messageId && messageId !== ctx.recapMessageId) {
+            ctx.recapMessageId = null;
+            ctx.recapText = "";
+          } else {
+            ctx.recapText += text;
+            ctx.recapLine = buildRecapLine(ctx.recapText);
+            ctx.tui.requestRender();
+            break;
+          }
+        }
+        // The marker arrives in pieces (`※`, ` recap`, `:`), so the head is held
+        // until it can be classified: a block must never be opened and then moved
+        // to the surface, and a `※` that turns out to open an answer must not be
+        // swallowed.
+        const head = classifyRecapHead(ctx.pendingAnswer + text);
+        if (ctx.recapEnabled && !ctx.currentMd && head === "undecided") {
+          ctx.pendingAnswer += text;
+          break;
+        }
+        if (ctx.recapExpected && !ctx.currentMd && head === "answer") {
+          // `/recap` was sent and goose answered it as a prompt: the turn ends
+          // without a line, and `finishTurn` says so instead of ending silent.
+          ctx.recapExpected = false;
+          ctx.recapAsPrompt = true;
+        }
+        if (ctx.recapEnabled && !ctx.currentMd && head === "recap") {
+          // The message id is remembered as the *open* one too, so the next
+          // chunk of this same message is not mistaken for a new message (that
+          // guard would close the message and drop the streaming target).
+          ctx.currentMessageId = messageId;
+          ctx.recapMessageId = messageId;
+          ctx.recapText = ctx.pendingAnswer + text;
+          // pi's `neverTwiceInARow`: an automatic recap only runs when a turn
+          // happened since the last one, and this is what "since" measures.
+          ctx.lastRecapTurn = ctx.turnsStarted;
+          ctx.recapExpected = false;
+          ctx.recapLine = buildRecapLine(ctx.recapText);
+          ctx.pendingAnswer = "";
+          ctx.tui.requestRender();
+          break;
+        }
         if (!ctx.currentMd) {
           // Nothing visible yet (a "\n\n" separator chunk): buffer it without
           // creating a block. A message that never produces visible text —
@@ -274,6 +358,11 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
     }
     case "user_message_chunk": {
       if (update.content?.type === "text") {
+        // A `/recap` replayed from history is not a message the user wrote: it
+        // asked for the line above the composer, which the replay restores when
+        // the recap itself arrives. Rendering it would put a `❯ /recap` in a
+        // conversation nobody typed one in.
+        if (ctx.recapEnabled && isRecapCommand(String(update.content.text ?? ""))) break;
         // A steer that the running turn picked up is a *live* user message:
         // it must be rendered even though `busy` is true (the replay guard
         // below would swallow it). It takes the provisional line's place.

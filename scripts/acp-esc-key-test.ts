@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 
-import { Container, Key } from "@earendil-works/pi-tui";
+import { Container, Key, getKeybindings } from "@earendil-works/pi-tui";
 
 import { attachInputListener } from "../src/acp/chat-ui.ts";
 import type { ChatContext } from "../src/acp/chat-context.ts";
@@ -55,6 +55,7 @@ function makeHarness(overrides: Partial<ChatContext> = {}): Harness {
     exitHintShown: false,
     loader: { setMessage: () => {}, stop: () => {}, setText: () => {}, start: () => {} },
     permissionQueue: [],
+    herdr: { enabled: false, report: () => {} },
     ...overrides,
   } as unknown as ChatContext;
 
@@ -147,6 +148,24 @@ ok("Esc leaves the autocomplete menu to the editor", () => {
 
 ok("Key.escape is the identifier the listener matches", () => {
   assert.equal(Key.escape, "escape");
+});
+
+ok("the editor already means end-of-line by Ctrl+E, so freeing it costs nothing", () => {
+  // Why the chat may let `^E` through: pi-tui's own editor binds it to
+  // `cursorLineEnd` (``"end", "ctrl+e"``), which is what a macOS terminal sends
+  // for Cmd+Right. Releasing the byte gives the user the key they pressed.
+  const keys = getKeybindings().getKeys("tui.editor.cursorLineEnd");
+  assert.ok(keys.includes("ctrl+e"), `cursorLineEnd keys: ${keys.join(", ")}`);
+});
+
+ok("Ctrl+E is the terminal's: a mac sends it for Cmd+Right", () => {
+  // A macOS terminal maps Cmd+Right to ^E, the end-of-line key. Binding the
+  // external editor there opened `$EDITOR` in the middle of navigating the
+  // composer, so the listener must leave the byte alone (`/edit` keeps the
+  // feature).
+  const h = makeHarness();
+  assert.equal(h.press("\x05"), undefined, "Ctrl+E is not consumed by the chat");
+  assert.equal(h.transcript.children.length, 0, "and nothing was printed in its place");
 });
 
 let failed = 0;

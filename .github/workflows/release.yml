@@ -41,3 +41,38 @@ jobs:
           # A release candidate must never become the "latest" stable release,
           # which is what `rossii update` installs without --pre.
           prerelease: ${{ contains(github.ref_name, '-rc.') }}
+
+  build-darwin-arm64:
+    name: build darwin-arm64
+    # Apple silicon. build.sh names the artifact after the host that compiled
+    # it, so this job publishes rossii-<ver>-darwin-arm64; the glibc loader gate
+    # is an ELF rule and is skipped off Linux.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Tag must match package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "v${version}" = "${GITHUB_REF_NAME}" || {
+            echo "tag ${GITHUB_REF_NAME} does not match package.json ${version}" >&2
+            exit 1
+          }
+
+      - name: Build
+        run: bash build.sh
+
+      # No generate_release_notes here: the linux job creates the release and
+      # owns its notes. This job only adds its two assets to it.
+      - name: Publish release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: |
+            rossii-*-darwin-arm64
+            rossii-*-darwin-arm64.sha256
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}
+

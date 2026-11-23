@@ -60,6 +60,7 @@ import pc from "../theme";
 
 import { AcpClient } from "./client";
 import { createChatContext } from "./chat-context";
+import { createHerdrReporter } from "../herdr";
 import type { AcpChatOptions } from "./chat-context";
 import { initExtensionPlan } from "./chat-extensions";
 import { setPromptHandlers } from "./chat-handlers";
@@ -74,17 +75,30 @@ import {
   startIdleWatchdog,
 } from "./chat-ui";
 import { env } from "../utils";
+import { readProjectRecap } from "../project";
 
 export type { AcpChatOptions };
 
 export async function runAcpChat(opts: AcpChatOptions): Promise<void> {
-  const ctx = createChatContext(opts);
+  // The recap settings are per directory (`/recap-config`): on and automatic by
+  // default, every key optional so a half-written meta keeps the default.
+  const recap = readProjectRecap();
+  const ctx = createChatContext({
+    ...opts,
+    recapEnabled: opts.recapEnabled ?? recap.enabled,
+    recapAuto: opts.recapAuto ?? recap.auto,
+    recapIdleMs: opts.recapIdleMs ?? recap.idleMs,
+  });
   // The extension plan is state, not UI: build it before anything can render.
   initExtensionPlan(ctx, opts);
 
   // Keep the last stderr lines around so an agent crash can be explained.
   ctx.client = AcpClient.spawn({
     cwd: opts.cwd,
+    // `ROSSII_GOOSE_BIN` runs a goose that is not the one on PATH — a build from
+    // source, a release candidate, a second install. The ACP client takes the
+    // binary as an option; nothing else in the chat cares where it came from.
+    bin: env("GOOSE_BIN"),
     env: opts.env,
     args: opts.agentBuiltins.length > 0
       ? ["--with-builtin", opts.agentBuiltins.join(",")]
@@ -101,6 +115,9 @@ export async function runAcpChat(opts: AcpChatOptions): Promise<void> {
   ctx.client.onUpdate((notification) => handleSessionUpdate(ctx, notification));
 
   setupUi(ctx);
+  // herdr's dot: this process is alive and idle until a turn starts.
+  ctx.herdr = createHerdrReporter();
+  ctx.herdr.report("idle");
   // Registration only — the agent can ask for a permission or a file as soon
   // as it is initialized, which `setupSession` does below.
   setPromptHandlers(ctx);

@@ -22,8 +22,26 @@ fork can take fixes from upstream instead of drifting away from it.
 
 ## What this fork adds
 
-- **Retrowave theme** (`/theme retrowave`) with coloured section bands: agent prose on green, tool
-  calls on blue, shell and your own messages on black.
+- **Retrowave theme** (`/theme retrowave`) with coloured section bands: agent prose on black,
+  tool calls on a dark blue, shell output on dark green, your own messages on light mauve.
+  `/theme monokai` paints the same bands at the same lightness with Monokai's own surfaces (its warm
+  black answer band, its mauve user band), so the sections keep their ranking in every themed variant.
+  No theme draws a frame around the conversation or the composer: the bands close each block and the
+  composer is two horizontal rules, nothing else.
+  The status bar is a HUD of slanted chips on the terminal's own background — the pi-bar powerline
+  look, with `\ue0ba`/`\ue0bc` separators, neutral grey chips and a Nerd Font.
+- **Recap line, automatically** — `/recap` (goose's own command, ported from `pi-recap`) answers with
+  one line, which the chat shows **above the composer** rather than in the transcript, the way pi's
+  widget does: `※ recap: what happened. Next, what to do. (disable recaps in /recap-config)`. Like pi
+  it is **on by default and automatic**: 30 s after a turn ends, in a session of at least three turns
+  with work since the last recap, the chat asks goose for one quietly (no `❯ /recap` echo) — a draft in
+  the composer, an open permission prompt or a new turn cancels it. The line stays while the
+  conversation scrolls, wraps instead of being truncated, and is hidden from the agent: it is not
+  compaction. `/recap-config auto off` stops the timer, `/recap-config auto 2m` changes the delay,
+  `/recap-config off` keeps `/recap` working but leaves its answer in the transcript.
+- **herdr pane status** — inside a herdr pane the dot follows the session: `working` during a turn,
+  `blocked` while a permission prompt waits for you, `idle` when it settles
+  (`ROSSII_HERDR_NO_SELF_REPORT=1` turns it off).
 - **Esc cancels, never quits** — Ctrl+C still exits, and `/exit` closes the chat from the composer.
 - **`goose-tui web`** — the same ACP session served to a browser over SSE, at `http://127.0.0.1:8787`
   by default.
@@ -100,7 +118,7 @@ session is running, changing any of that means restarting it.
 ### Option 1: One-liner — the latest release (no runtime needed)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/viorn/rossii/main/install-release.sh | sh
+curl -fsSL https://raw.githubusercontent.com/artificemachine/goose-tui/main/install-release.sh | sh
 ```
 
 Fetches the newest GitHub release, checks its SHA-256 and installs the binary to
@@ -143,7 +161,8 @@ rossii update --pre      # take the newest published release, prereleases includ
 rossii update --version v3.5.2 --dir /usr/local/bin
 ```
 
-It downloads the matching `rossii-<version>-linux-x86_64` asset, verifies its SHA-256
+It downloads the matching `rossii-<version>-<os>-<arch>` asset (`linux-x86_64`, or
+`darwin-arm64` on Apple silicon), verifies its SHA-256
 (the asset digest, falling back to the published `.sha256`), and replaces the running
 binary atomically. Run from source, it installs to `~/.local/bin/rossii` instead.
 `ROSSII_REPO`, `ROSSII_INSTALL_DIR` and `GITHUB_TOKEN` are honoured; `--help` lists
@@ -172,6 +191,8 @@ set/provider/model from the project's history, and keeps everything changeable f
   conversation is not carried over (a fork keeps it, since the copy starts as that conversation).
 - **Its own screen** — the chat owns the alternate screen and scrolls the transcript itself
   (mouse wheel, PgUp/PgDn, Ctrl+Shift+F to search) while the composer stays pinned at the bottom.
+  The transcript is frameless — no rounded corners, no side bars — because the section bands
+  already delimit every block and the box only cost width and height on every themed surface.
   Streaming never yanks the view back. On exit the transcript is printed to the normal screen, so
   it stays in your scrollback. `ROSSII_CHAT_MAIN_SCREEN=1` restores the inline renderer.
 - **Permissions** — `session/request_permission` requests appear as framed dialogs (queued when
@@ -242,7 +263,7 @@ The menu is a shortcut for typing, not a filter: type the commands out in full a
 | `/think [expand\|collapse] [all]` | Expand/collapse thinking blocks (bare `/think` toggles the last one) |
 | `/tool [toggle\|expand\|collapse] [all]` | Expand/collapse tool call blocks (bare `/tool` toggles the last one, `all` covers the conversation) |
 | `/timeout [30m\|reset]` · `/timeout tool 1h` | Watchdog values: idle (default target) or the tool guard; saved for this directory |
-| `/theme [name]` | Colour theme: `default`, `goose`, `opencode`, `retrowave`, `dracula`, `nord`, `light`; saved in `~/.config/rossii/theme`. Needs a 24-bit colour terminal; earlier text keeps its colours |
+| `/theme [name]` | Colour theme: `default`, `goose`, `opencode`, `retrowave`, `retrowave2`, `monokai`, `dracula`, `nord`, `light`; saved in `~/.config/rossii/theme`. The themed variants (`retrowave`, `retrowave2`, `monokai`) also paint the section bands. Needs a 24-bit colour terminal; earlier text keeps its colours |
 | `/settings` (alias of `/config`) | Same menu as `/config` |
 | `/exit` (alias `/quit`) | Close the chat — Esc never quits, it cancels the running turn; Ctrl+C also exits |
 | `/help` | List the commands — the chat's and goose's |
@@ -264,7 +285,6 @@ steered: goose only looks for a command in a turn's prompt).
 |-----|------|
 | `Ctrl+P` | the configuration menu (`/config`) |
 | `Ctrl+O` | the model menu (`/model`) |
-| `Ctrl+E` | the external editor (`/edit`) |
 | `Ctrl+J` | a line break in the composer (`Shift+Enter` too, where the terminal reports it; `\` then Enter anywhere) |
 
 Enter is a single `CR` byte, and `Shift+Enter` has no legacy encoding at all — without a keyboard protocol
@@ -274,8 +294,9 @@ terminals that speak them (VS Code's integrated terminal among them) and cannot 
 not (a legacy GNOME Terminal, xterm, Alacritty). `Ctrl+J` is `LF`, a byte of its own, so it inserts a line
 in every terminal — that is why it is the one to remember. `\` followed by Enter is pi-tui's built-in
 fallback for the rest: it deletes the backslash and breaks the line instead of sending, which also means a
-real trailing `\` cannot be sent that way. And when a line break is not the point, `Ctrl+E` hands the whole
-draft to `$EDITOR`.
+real trailing `\` cannot be sent that way. And when a line break is not the point, `/edit` hands the whole draft to `$EDITOR` (deliberately no
+shortcut: a macOS terminal sends `Ctrl+E` for `⌘→`, the end-of-line key, so binding it opened an editor
+in the middle of navigation).
 
 `Ctrl+M` cannot be bound to the model menu: a terminal sends Enter as CR, which *is* Ctrl+M, so the
 shortcut would fire every time you submit a prompt. `Ctrl+O` is the free equivalent.
