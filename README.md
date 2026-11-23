@@ -100,7 +100,7 @@ session is running, changing any of that means restarting it.
 ### Option 1: One-liner — the latest release (no runtime needed)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/viorn/rossii/main/install-release.sh | sh
+curl -fsSL https://raw.githubusercontent.com/artificemachine/goose-tui/main/install-release.sh | sh
 ```
 
 Fetches the newest GitHub release, checks its SHA-256 and installs the binary to
@@ -143,7 +143,8 @@ rossii update --pre      # take the newest published release, prereleases includ
 rossii update --version v3.5.2 --dir /usr/local/bin
 ```
 
-It downloads the matching `rossii-<version>-linux-x86_64` asset, verifies its SHA-256
+It downloads the matching `rossii-<version>-<os>-<arch>` asset (`linux-x86_64`, or
+`darwin-arm64` on Apple silicon), verifies its SHA-256
 (the asset digest, falling back to the published `.sha256`), and replaces the running
 binary atomically. Run from source, it installs to `~/.local/bin/rossii` instead.
 `ROSSII_REPO`, `ROSSII_INSTALL_DIR` and `GITHUB_TOKEN` are honoured; `--help` lists

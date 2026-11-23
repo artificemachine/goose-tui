@@ -88,7 +88,11 @@ checks.push(["releasePlatform knows what is actually published", () => {
   assert.deepEqual(releasePlatform("linux", "x64"), { os: "linux", arch: "x86_64" });
   assert.deepEqual(releasePlatform("linux", "x86_64"), { os: "linux", arch: "x86_64" });
   assert.equal(releasePlatform("linux", "arm64"), null);
+  // macOS on Apple silicon is published (release.yml builds it on macos-14);
+  // Intel macOS and ARM Linux are not, and must keep refusing.
+  assert.deepEqual(releasePlatform("darwin", "arm64"), { os: "darwin", arch: "arm64" });
   assert.equal(releasePlatform("darwin", "x64"), null);
+  assert.equal(releasePlatform("win32", "x64"), null);
 }]);
 
 // ─── Runner ──────────────────────────────────────────────────────────────────

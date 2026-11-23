@@ -109,6 +109,10 @@ fi
 # the checks above, so a binary that fails them never gets one.
 if command -v sha256sum >/dev/null 2>&1; then
   sha256sum "${OUTFILE}" > "${OUTFILE}.sha256"
+elif command -v shasum >/dev/null 2>&1; then
+  # macOS: `shasum -a 256` prints the same "<hash>  <file>" line, so
+  # install-release.sh and the release workflow parse it unchanged.
+  shasum -a 256 "${OUTFILE}" > "${OUTFILE}.sha256"
 fi
 
 echo ""

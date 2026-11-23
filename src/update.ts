@@ -21,7 +21,10 @@ import pkg from "../package.json";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const DEFAULT_REPO = "viorn/rossii";
+// This fork publishes its own releases; upstream (viorn/rossii) stopped at
+// v3.6.1, so pointing there made `rossii update` report "already up to date"
+// for a fork that had newer candidates. ROSSI_REPO still overrides it.
+const DEFAULT_REPO = "artificemachine/goose-tui";
 const DEFAULT_INSTALL_DIR = join(homedir(), ".local", "bin");
 const BIN_NAME = "rossii";
 
@@ -100,9 +103,15 @@ export function releasePlatform(
   platform: NodeJS.Platform = process.platform,
   arch: string = process.arch,
 ): { os: string; arch: string } | null {
-  if (platform !== "linux") return null;
-  if (arch !== "x64" && arch !== "x86_64") return null;
-  return { os: "linux", arch: "x86_64" };
+  // What `release.yml` actually publishes: glibc Linux x86-64 from ubuntu-22.04,
+  // and Apple silicon macOS from macos-14. Anything else is build-from-source.
+  if (platform === "linux" && (arch === "x64" || arch === "x86_64")) {
+    return { os: "linux", arch: "x86_64" };
+  }
+  if (platform === "darwin" && arch === "arm64") {
+    return { os: "darwin", arch: "arm64" };
+  }
+  return null;
 }
 
 // ─── GitHub API ──────────────────────────────────────────────────────────────
@@ -277,7 +286,7 @@ export async function runUpdate(args: string[]): Promise<number> {
   const installDir = opts.dir ?? process.env.ROSSII_INSTALL_DIR;
   const platform = releasePlatform();
   if (!platform) {
-    console.error(pc.red(`✗ no ${process.platform}-${process.arch} build is published — releases carry linux-x86_64 only`));
+    console.error(pc.red(`✗ no ${process.platform}-${process.arch} build is published — releases carry linux-x86_64 and darwin-arm64`));
     console.error(pc.dim("  build from source instead: git clone … && bash build.sh"));
     return 1;
   }
