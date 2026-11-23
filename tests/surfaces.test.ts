@@ -52,15 +52,16 @@ describe("the recap line surface", () => {
   });
 
   test("every_recap_row_fits_the_width_with_its_padding", () => {
-    // The muted styling itself is pinned in `scripts/theme-surface-test.ts`:
-    // picocolors switches colour off when stdout is not a TTY, which is what
-    // `bun test` is, so an SGR assertion here would only test the terminal.
-    const rows = new RecapSurface(() => line).render(100);
+    // Geometry, measured on the text: picocolors paints `pc.dim(...)` not only
+    // on a TTY but whenever `CI` is in the environment (GitHub Actions sets it),
+    // so a raw row carries an SGR prefix on CI and none here. The muting is
+    // pinned in `scripts/theme-surface-test.ts`, where colour is forced on.
+    const rows = new RecapSurface(() => line).render(100).map((row) => plain([row]));
     rows.forEach((row) => {
       expect(row.startsWith(" ")).toBe(true);
       expect([...row].length).toBeLessThanOrEqual(100);
     });
-    expect(plain(rows).replace(/\s+/g, " ")).toContain(RECAP_HINT);
+    expect(rows.join(" ").replace(/\s+/g, " ")).toContain(RECAP_HINT);
   });
 
   test("no_recap_is_one_empty_row", () => {
