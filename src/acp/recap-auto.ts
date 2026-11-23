@@ -72,6 +72,10 @@ export function submitQuietRecap(ctx: ChatContext): void {
   // instruction), `neverTwiceInARow` must still hold — otherwise the timer arms
   // after that turn, fires, asks again, and the chat recaps itself in a loop.
   ctx.lastRecapTurn = ctx.turnsStarted;
+  // Recorded at request time, like the turn: the answer is checked when the
+  // turn ends (`finishTurn`), because a `/recap` goose runs as a prompt comes
+  // back as prose and would otherwise fail silently.
+  ctx.recapExpected = true;
   ctx.quietPrompt = true;
   // Imported lazily: `chat-io.ts` imports this module for the timer hooks.
   void import("./chat-io").then(({ submitPrompt }) => submitPrompt(ctx, "/recap"));

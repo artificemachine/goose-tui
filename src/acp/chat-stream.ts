@@ -278,6 +278,12 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
           ctx.pendingAnswer += text;
           break;
         }
+        if (ctx.recapExpected && !ctx.currentMd && head === "answer") {
+          // `/recap` was sent and goose answered it as a prompt: the turn ends
+          // without a line, and `finishTurn` says so instead of ending silent.
+          ctx.recapExpected = false;
+          ctx.recapAsPrompt = true;
+        }
         if (ctx.recapEnabled && !ctx.currentMd && head === "recap") {
           // The message id is remembered as the *open* one too, so the next
           // chunk of this same message is not mistaken for a new message (that
@@ -288,6 +294,7 @@ export function handleSessionUpdate(ctx: ChatContext, notification: SessionNotif
           // pi's `neverTwiceInARow`: an automatic recap only runs when a turn
           // happened since the last one, and this is what "since" measures.
           ctx.lastRecapTurn = ctx.turnsStarted;
+          ctx.recapExpected = false;
           ctx.recapLine = buildRecapLine(ctx.recapText);
           ctx.pendingAnswer = "";
           ctx.tui.requestRender();

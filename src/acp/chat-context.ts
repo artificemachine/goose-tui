@@ -319,6 +319,10 @@ export interface ChatContext {
    */
   quietPrompt: boolean;
   /** Message id of the recap being streamed, so its later chunks append to the line. */
+  /** A `/recap` is in flight: its answer must be the command's marker. */
+  recapExpected: boolean;
+  /** `/recap` came back as prose: the command was not dispatched. */
+  recapAsPrompt: boolean;
   recapMessageId: string | null;
   /** Text accumulated for that message; `recapLine` is rebuilt from it. */
   recapText: string;
@@ -481,6 +485,8 @@ export function createChatContext(opts: AcpChatOptions): ChatContext {
     recapEnabled: opts.recapEnabled ?? true,
     recapAuto: opts.recapAuto ?? true,
     recapIdleMs: opts.recapIdleMs ?? RECAP_AUTO_DELAY_MS,
+    recapExpected: false,
+    recapAsPrompt: false,
     recapMessageId: null,
     recapText: "",
     lastRecapTurn: 0,

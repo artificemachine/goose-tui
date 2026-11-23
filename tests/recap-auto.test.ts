@@ -10,6 +10,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { armAutoRecap, cancelAutoRecap, submitQuietRecap } from "../src/acp/recap-auto";
+import { finishTurn } from "../src/acp/chat-io";
+import { handleSessionUpdate } from "../src/acp/chat-stream";
 
 interface PromptCall {
   sessionId: string;
@@ -35,6 +37,8 @@ function fixture(overrides: Record<string, unknown> = {}) {
     lastRecapTurn: 0,
     turnsStarted: 5,
     quietPrompt: false,
+    recapExpected: false,
+    recapAsPrompt: false,
     // Turn state the submit path touches
     cancelRequested: false,
     activeRunId: null,
@@ -202,5 +206,46 @@ describe("the manual path", () => {
     submitQuietRecap(noSession.ctx as any);
     await wait(50);
     expect(noSession.calls).toHaveLength(0);
+  });
+});
+
+describe("when the command does not run", () => {
+  // Seen live on 2026-11-23: two `/recap` prompts were answered by the model as
+  // prose instead of being dispatched by goose. The line never appeared and the
+  // turn ended in silence — nothing said the command had been skipped.
+  test("a prose answer is reported at the end of the turn, not swallowed", async () => {
+    const { ctx, transcript } = fixture();
+    await submitQuietRecap(ctx as any);
+    expect(ctx.recapExpected).toBe(true);
+    // goose answered the prompt itself instead of running the command.
+    handleSessionUpdate(ctx as any, {
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        messageId: "m-prose",
+        content: { type: "text", text: "Here is a recap of the session: we did things." },
+      },
+    } as any);
+    finishTurn(ctx as any);
+    const lines = transcript.map((child: any) => String(child?.text ?? child)).join("\n");
+    expect(lines).toContain("/recap came back as an ordinary message");
+    expect(ctx.recapExpected).toBe(false);
+  });
+
+  test("a real recap clears the expectation, so the turn ends quiet", async () => {
+    const { ctx, transcript } = fixture();
+    await submitQuietRecap(ctx as any);
+    handleSessionUpdate(ctx as any, {
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        messageId: "m-1",
+        content: { type: "text", text: "※ recap: nothing moved. Next, restart." },
+      },
+    } as any);
+    expect(ctx.recapExpected).toBe(false);
+    finishTurn(ctx as any);
+    const lines = transcript.map((child: any) => String(child?.text ?? child)).join("\n");
+    expect(lines).not.toContain("came back as an ordinary message");
   });
 });
