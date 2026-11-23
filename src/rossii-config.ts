@@ -62,6 +62,25 @@ export type DefaultMode = "worktree" | "no-worktree";
 export const DEFAULT_PROFILE_SENTINEL = "__default__";
 
 /**
+ * Which set the wizard preselects on the `set` step.
+ *
+ * A directory with no project meta used to get `""`, i.e. None, and None means
+ * NO extensions at all: `goose-tui` in a fresh clone opened an agent with no
+ * file or shell tools (measured on goose 1.59.2 — 0 tools, against 5 for a set
+ * naming `developer`). With no history the profile is the honest default: it is
+ * what `goose session` loads, and `~/.config/goose/config.yaml` is where the
+ * user configured extensions.
+ *
+ * An explicit `None` or `Default` in the history is kept as it is. Those are
+ * choices, and the difference between them and "nothing recorded yet" is the
+ * whole point of looking at the history instead of at its first element.
+ */
+export function defaultSetSelection(setHistory: readonly string[] | undefined): string {
+  if (!setHistory || setHistory.length === 0) return DEFAULT_PROFILE_SENTINEL;
+  return setHistory[0] ?? "";
+}
+
+/**
  * A named session set — bundles a system prompt with extensions.
  * Used as a lightweight alternative to Goose recipes, always launched
  * via `goose session` (never `goose run`).

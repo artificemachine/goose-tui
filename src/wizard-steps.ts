@@ -13,7 +13,7 @@ import { autocomplete, confirm, isCancel, log, outro, text } from "@clack/prompt
 import pc from "./theme";
 
 import { env, generateSessionName, formatNumber } from "./utils";
-import { listSessionSets } from "./rossii-config";
+import { defaultSetSelection, listSessionSets } from "./rossii-config";
 import { DEFAULT_PROFILE_SENTINEL } from "./launcher";
 import {
   getConfigProviders, getDiscoveredCustomProviders, getCustomProviderModels,
@@ -240,8 +240,11 @@ export async function stepSet(state: WizardState): Promise<Step> {
     const allSets = listSessionSets();
 
     const lastMeta = readProjectMeta();
-    const lastSet = lastMeta?.setHistory?.[0] ?? "";
     const setHistory = lastMeta?.setHistory ?? [];
+    // `lastSet` drives only the "← last used" markers and the ordering, so it
+    // stays empty when nothing was ever recorded: on a fresh directory no option
+    // was used, and the preselection (below) is the profile.
+    const lastSet = setHistory.length > 0 ? (setHistory[0] ?? "") : "";
 
     const setOptions: { label: string; value: string; hint?: string }[] = [];
 
@@ -264,7 +267,7 @@ export async function stepSet(state: WizardState): Promise<Step> {
 
     // 2) "None" option — no extensions at all (--no-profile, nothing else)
     setOptions.push({
-      label: !lastSetObj && lastSet === ""
+      label: setHistory.length > 0 && !lastSetObj && lastSet === ""
         ? pc.green("✦ None") + ` ${pc.dim("←")}`
         : "None",
       value: "",
@@ -321,10 +324,10 @@ export async function stepSet(state: WizardState): Promise<Step> {
 
     const selected = await autocomplete({
       message: `Session set: ${pc.dim("(Esc ← back to session name)")}`,
-      placeholder: "Type to filter... (default = none)",
+      placeholder: "Type to filter... (last used, else Default)",
       options: setOptions,
       maxItems: 10,
-      initialValue: lastSet || "",
+      initialValue: defaultSetSelection(setHistory),
       filter: (search, opt) => {
         const haystack = `${opt.value} ${opt.label} ${opt.hint || ""}`.toLowerCase();
         return haystack.includes(search.toLowerCase());

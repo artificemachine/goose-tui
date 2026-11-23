@@ -13,6 +13,7 @@ import {
   buildMcpServers,
   diffExtensions,
   extensionName,
+  hasFileShellTools,
   listedExtensionName,
   planGooseExtensions,
   planProfileExtensions,
@@ -177,6 +178,18 @@ export async function verifySessionExtensions(ctx: ChatContext, id: string): Pro
     );
   } else if (missing.length > 0) {
     noteExtensionWarning(ctx, `the agent did not load: ${missing.join(", ")}`);
+  }
+  // A set that names no `developer` — None, or one that forgot it — leaves the
+  // agent unable to read files or run commands, and nothing else says so: the
+  // chat looks alive until the first "I can't access the repository". The plan
+  // cannot answer this question; only the list the agent reported can, because
+  // a build may keep its own implicit `developer` on a resumed session while a
+  // newly created one gets nothing at all.
+  if (!required.has("developer") && !hasFileShellTools(present)) {
+    noteExtensionWarning(ctx,
+      "no file/shell tools: this session loaded no `developer` extension, so the agent cannot read files or run commands. " +
+        "Pick a set with `builtins: [developer]` (Set → Create new set…), or Default to load the profile.",
+    );
   }
 }
 

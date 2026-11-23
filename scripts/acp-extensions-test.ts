@@ -11,6 +11,7 @@ import {
   commandToName,
   diffExtensions,
   extensionName,
+  hasFileShellTools,
   httpToName,
   listedExtensionName,
   parseHttpSpec,
@@ -24,6 +25,15 @@ import type { GooseExtension } from "../src/acp/types";
 type Check = [name: string, run: () => void];
 
 const checks: Check[] = [
+  ["hasFileShellTools: only goose's developer builtin grants file/shell access", () => {
+    // Live on goose 1.59.2: a session created with `builtins: [developer]`
+    // exposes edit/read_image/shell/tree/write; one created with no extensions
+    // exposes nothing at all. `developer` is the extension behind that set.
+    assert.equal(hasFileShellTools(["developer"]), true);
+    assert.equal(hasFileShellTools(["analyze", "developer", "todo"]), true);
+    assert.equal(hasFileShellTools([]), false);
+    assert.equal(hasFileShellTools(["analyze", "todo", "summon"]), false);
+  }],
   ["commandToName: basename of a path", () => {
     assert.equal(commandToName("/usr/bin/python3"), "python3");
     assert.equal(commandToName("npx"), "npx");
