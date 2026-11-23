@@ -2,8 +2,9 @@
  * Section band — the coloured strip that marks one section of the transcript.
  *
  * Pi's TUI paints every section of a conversation with its own band: answers
- * and thoughts take the black one, tool calls the dark blue one, shell output
- * the teal one (green in monokai), the user's prompt the light mauve one.
+ * and thoughts take the darkest one, tool calls a blue one above it, shell
+ * output the teal one (green in monokai), the user's prompt the light mauve
+ * one.
  * rossii has no equivalent primitive, so this
  * component paints a child's rendered lines: a one-column blank gutter plus a
  * background that spans the transcript width.
@@ -36,7 +37,7 @@ export const USER_BAND_GUTTER = " ";
  * chrome — the retrowave values, so the assertions stay meaningful.
  */
 export function agentBandBg(): string {
-  return bandBackground(themeChrome()?.agentBand ?? "34;35;36");
+  return bandBackground(themeChrome()?.agentBand ?? "50;50;64");
 }
 
 /** Shell band: the rawest output on screen. */
@@ -57,7 +58,7 @@ export function shellBandFg(): string | undefined {
 
 /** Tool band: a tool call must never read as an answer. */
 export function toolBandBg(): string {
-  return bandBackground(themeChrome()?.toolBand ?? "21;50;63");
+  return bandBackground(themeChrome()?.toolBand ?? "32;79;101");
 }
 
 /**

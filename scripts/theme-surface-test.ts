@@ -86,7 +86,7 @@ const userLines = userMessage.render(30);
 assert.ok(userLines.length >= 2, "multiline user message");
 assert.ok(userLines.every((line) => line.includes("\x1b[48;2;200;156;255m")), "every user message line takes the mauve band");
 assert.ok(userLines.every((line) => line.includes("\x1b[38;2;26;16;36m")), "the mauve band carries its dark foreground");
-assert.ok(userLines.every((line) => !line.includes("\x1b[48;2;34;35;36m")), "a user message is not the answers' band");
+assert.ok(userLines.every((line) => !line.includes("\x1b[48;2;50;50;64m")), "a user message is not the answers' band");
 assert.ok(userLines.every((line) => visibleWidth(line) === 30), "user message background spans the width");
 const tool = new ToolCallBlock();
 tool.setTitle("shell · echo hello");
@@ -94,7 +94,7 @@ assert.ok(tool.render(30).every((line) => line.includes("\x1b[48;2;0;129;176m"))
 assert.ok(tool.render(30).every((line) => line.includes("\x1b[38;2;255;255;255m")), "the teal band carries its white foreground");
 assert.ok(!tool.render(30)[0].includes("\u258c"), "no gutter glyph on a shell block");
 tool.setTitle("read · file.txt");
-assert.ok(tool.render(30).every((line) => line.includes("\x1b[48;2;21;50;63m")), "tool calls take the blue band");
+assert.ok(tool.render(30).every((line) => line.includes("\x1b[48;2;32;79;101m")), "tool calls take the blue band");
 assert.ok(!tool.render(30)[0].includes("\u258c"), "no gutter glyph on a tool call");
 tool.setKind("execute");
 tool.setKind(undefined);
@@ -103,10 +103,10 @@ tool.setTitle("shell · echo hello");
 tool.setKind("other");
 assert.ok(tool.render(30)[0].includes("\x1b[48;2;0;129;176m"), "default ACP kind falls back to title");
 tool.setTitle("load skill · x");
-assert.ok(tool.render(30)[0].includes("\x1b[48;2;21;50;63m"), "non-shell tools share the blue band");
+assert.ok(tool.render(30)[0].includes("\x1b[48;2;32;79;101m"), "non-shell tools share the blue band");
 const banded = new SectionBand(new Text("answer line\nsecond", 1, 0)).render(30);
 assert.equal(banded.length, 2, "band keeps the child's line count");
-assert.ok(banded.every((line) => line.includes("\x1b[48;2;34;35;36m")), "answer sections carry the dark grey band");
+assert.ok(banded.every((line) => line.includes("\x1b[48;2;50;50;64m")), "answer sections carry the dark grey band");
 assert.ok(banded.every((line) => !line.includes("\u258c")), "answer sections carry no gutter glyph");
 assert.ok(banded.every((line) => visibleWidth(line) === 30), "the band spans the width");
 // Monokai: the retrowave slots with Monokai's own hues — warm black answers,
@@ -136,11 +136,11 @@ assert.ok(tool.render(30).every((line) => line.includes("\x1b[48;2;42;72;21m")),
 // surfaces (composer, status, an already-built tool block) follow a switch.
 setTheme("retrowave", null);
 const backToRetrowave = new SectionBand(new Text("answer", 1, 0)).render(30);
-assert.ok(backToRetrowave.every((line) => line.includes("\x1b[48;2;34;35;36m")), "switching back restores the retrowave answer band");
+assert.ok(backToRetrowave.every((line) => line.includes("\x1b[48;2;50;50;64m")), "switching back restores the retrowave answer band");
 setTheme("default", null);
 assert.ok(!view.render(30).join("").includes("╭"), "default has no frame");
 tool.setKind("read");
-assert.ok(!tool.render(30).join("").includes("\x1b[48;2;21;50;63m"), "a theme with no chrome paints no bands");
+assert.ok(!tool.render(30).join("").includes("\x1b[48;2;32;79;101m"), "a theme with no chrome paints no bands");
 assert.ok(tool.render(30).every((line) => visibleWidth(line) <= 30), "tool block fits the width");
 assert.deepEqual(editor.render(30).length, original.length);
 assert.ok(!editor.render(30).join("").includes("\x1b[48;2;22;22;30m"));

@@ -89,13 +89,13 @@ test("unusable_saved_theme_falls_back_to_default", () => {
 /**
  * The chrome ladder, measured rather than eyeballed.
  *
- * Retrowave defines the shape of a conversation: agent prose on a dark green
- * band, tool calls on a visibly darker blue one, shell output on black, the
- * user's own message on the one light (mauve) surface. Every theme that paints
- * chrome must reproduce that *order of lightness* and those colour families —
- * only the hue changes — or switching themes would silently re-rank the
- * sections. These tests are the guard: change a band and they say which step of
- * the ladder broke.
+ * Retrowave defines the shape of a conversation: agent prose on the darkest
+ * band, tool calls on a blue one above it, shell output on the coloured one on
+ * top, the user's own message on the one light (mauve) surface. Every theme that
+ * paints chrome must reproduce that *order of lightness* and those colour
+ * families — only the hue changes — or switching themes would silently re-rank
+ * the sections. These tests are the guard: change a band and they say which
+ * step of the ladder broke.
  */
 
 type Rgb = [number, number, number];
@@ -217,11 +217,12 @@ test("every_chrome_theme_keeps_each_section_on_its_own_colour", () => {
     // warm, its green lime-tinted — but never the slot: switching themes must
     // not re-rank the conversation or turn an answer into the user's band.
     // Answers are the darkest surface, but "darkest" is not "black": retrowave
-    // lifts them to the owner's dark grey `#222324` (L* 13.7) and keeps the tool
-    // band 5.6 L* above. The cap below is what stops an answer band from becoming
-    // a second tool band (the ladder test enforces the gap itself).
+    // lifts them to the owner's slate `#323240` (L* 21.3) and keeps the tool
+    // band ten L* above (`#204F65`, L* 31.4). The cap below is what stops an
+    // answer band from becoming a tool band (the ladder test enforces the gap
+    // itself, and the tool band's own hue/saturation keep it blue).
     expectWithin(name, "agentBand saturation", saturation(chrome.agentBand), 0, 20);
-    expectWithin(name, "agentBand lightness", lightness(chrome.agentBand), 0, 15);
+    expectWithin(name, "agentBand lightness", lightness(chrome.agentBand), 0, 25);
 
     expectWithin(name, "toolBand hue", hue(chrome.toolBand), 180, 235);
     expectWithin(name, "toolBand saturation", saturation(chrome.toolBand), 25, 100);
