@@ -192,7 +192,8 @@ export async function verifySessionExtensions(ctx: ChatContext, id: string): Pro
     // `developer` and its tools as soon as the extension is added.
     noteExtensionWarning(ctx,
       "no file/shell tools: this session loaded no `developer` extension, so the agent cannot read files or run commands. " +
-        "Fix it here with /set → Default (or a set listing `builtins: [developer]`); the extensions switch in place.",
+        "Fix it here with /set → Default (or a set listing `builtins: [developer]`); the extensions switch in place. " +
+        "If the agent still reports no tools, start a new session.",
     );
   }
 }
