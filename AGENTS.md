@@ -358,7 +358,8 @@ warns in the TUI and keeps the ACP default.
   `retrowave` — three dark steps (one black, one blue, one green or neutral) and
   one light user band — so contrast never depends on the theme; the *order* is the
   theme's own, and only the hue changes. `retrowave` answers on black and gives the
-  green band to the shell; `monokai` answers on a neutral `#404040`; both keep the
+  teal band (`#0081B0`, with its own white foreground) to the shell; `monokai` keeps the
+green one; both keep the
   blue tool band and the mauve user band. Band colours are read at render time, so
   `/theme` applies to the next block without a restart; blocks already on screen
   keep theirs

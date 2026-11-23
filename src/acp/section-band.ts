@@ -1,9 +1,10 @@
 /**
  * Section band — the coloured strip that marks one section of the transcript.
  *
- * Pi's TUI paints every section of a conversation with its own band: agent
- * sections (answers, thoughts, tool calls) share the green one, the user's
- * prompt gets the black one. rossii has no equivalent primitive, so this
+ * Pi's TUI paints every section of a conversation with its own band: answers
+ * and thoughts take the black one, tool calls the dark blue one, shell output
+ * the teal one (green in monokai), the user's prompt the light mauve one.
+ * rossii has no equivalent primitive, so this
  * component paints a child's rendered lines: a one-column blank gutter plus a
  * background that spans the transcript width.
  *
@@ -35,12 +36,23 @@ export const USER_BAND_GUTTER = " ";
  * chrome — the retrowave values, so the assertions stay meaningful.
  */
 export function agentBandBg(): string {
-  return bandBackground(themeChrome()?.agentBand ?? "24;72;52");
+  return bandBackground(themeChrome()?.agentBand ?? "12;12;14");
 }
 
 /** Shell band: the rawest output on screen. */
 export function shellBandBg(): string {
-  return bandBackground(themeChrome()?.shellBand ?? "12;12;14");
+  return bandBackground(themeChrome()?.shellBand ?? "0;129;176");
+}
+
+/**
+ * Foreground of the shell band, when the theme gives it a mid-tone background:
+ * the retrowave teal is light enough that the inherited colours lose their
+ * contrast on it, so those themes name a white one. Absent leaves the text as
+ * the block rendered it, which is right for a dark band.
+ */
+export function shellBandFg(): string | undefined {
+  const fg = themeChrome()?.shellBandFg;
+  return fg ? `\x1b[38;2;${fg}m` : undefined;
 }
 
 /** Tool band: a tool call must never read as an answer. */

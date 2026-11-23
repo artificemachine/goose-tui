@@ -178,24 +178,27 @@ test("at_least_retrowave_and_monokai_paint_chrome", () => {
   expect(names).toContain("monokai");
 });
 
-test("every_chrome_theme_keeps_a_dark_three_step_band_ladder", () => {
+test("every_chrome_theme_keeps_a_three_step_band_ladder", () => {
   for (const [name, chrome] of chromeThemes()) {
     const bands = [chrome.agentBand, chrome.toolBand, chrome.shellBand];
     const steps = bands.map(lightness).sort((a, b) => a - b);
     const user = lightness(chrome.userBand);
     const prompt = lightness(chrome.promptBg);
 
-    // Three bands of a conversation, three dark steps: the green shell band on
-    // top, the blue tool band below it, the black answer band last.
+    // Three bands of a conversation, three steps and never one surface: the
+    // shell band on top, the tool band below it, the answer band last. None of
+    // them may climb into the light range — the shell band is a *mid* tone in
+    // the retrowave themes (the owner's teal `#0081B0`, L* 50.5) and 55 is the
+    // ceiling that keeps it a band rather than a second user surface.
     for (const [index, step] of steps.entries()) {
-      expectWithin(name, `band${index}`, step, 0, 34);
+      expectWithin(name, `band${index}`, step, 0, 55);
     }
     expectWithin(name, "band steps", steps[1]! - steps[0]!, 5, 100);
     expectWithin(name, "band steps (top)", steps[2]! - steps[1]!, 5, 100);
 
     // The user band is the one light surface, far from every other one.
     expectWithin(name, "userBand", user, 60, 100);
-    expectWithin(name, "userBand-lightestBand", user - steps[2]!, 25, 100);
+    expectWithin(name, "userBand-lightestBand", user - steps[2]!, 18, 100);
 
     // The composer is a dark surface of its own: never one of the three bands,
     // never as light as the user band.
@@ -218,10 +221,35 @@ test("every_chrome_theme_keeps_each_section_on_its_own_colour", () => {
 
     expectWithin(name, "toolBand hue", hue(chrome.toolBand), 180, 235);
     expectWithin(name, "toolBand saturation", saturation(chrome.toolBand), 25, 100);
-    expectWithin(name, "shellBand hue", hue(chrome.shellBand), 70, 180);
+    // The shell family runs green (monokai's lime, hue 95) through teal to blue
+    // (retrowave's `#0081B0`, hue 196). It overlaps the tool family, so the two
+    // bands must stay separable some other way: a wide hue gap or a clear step
+    // of lightness. Retrowave separates them by lightness (34.5 L*), monokai by
+    // hue (109°), and neither may collapse to both-at-once.
+    expectWithin(name, "shellBand hue", hue(chrome.shellBand), 70, 215);
     expectWithin(name, "shellBand saturation", saturation(chrome.shellBand), 25, 100);
+    const hueGap = Math.abs(hue(chrome.shellBand) - hue(chrome.toolBand));
+    const hueSeparation = Math.min(hueGap, 360 - hueGap);
+    const lightSeparation = lightness(chrome.shellBand) - lightness(chrome.toolBand);
+    const separable = hueSeparation >= 20 || lightSeparation >= 15;
+    expect({ theme: name, hueSeparation, lightSeparation, separable }).toEqual({
+      theme: name,
+      hueSeparation,
+      lightSeparation,
+      separable: true,
+    });
 
     expectWithin(name, "userBand hue", hue(chrome.userBand), 245, 300);
+  }
+});
+
+test("the_shell_band_carries_a_legible_foreground_when_it_is_a_mid_tone", () => {
+  for (const [name, chrome] of chromeThemes()) {
+    if (!chrome.shellBandFg) continue;
+    // `#0081B0` tops out at 4.41:1 with pure white, so this asserts the best the
+    // colour allows rather than an AA it cannot reach — and it fails the moment
+    // the band gets lighter or the foreground gets darker than white.
+    expectWithin(name, "shellBandFg contrast", contrast(chrome.shellBandFg, chrome.shellBand), 4.4, 21);
   }
 });
 
