@@ -60,8 +60,8 @@ export const THEME_NAMES: readonly ThemeName[] = ["default", ...(Object.keys(THE
  * for every one of them — a theme is in this table or it has no chrome at all.
  *
  * The rule for a new entry is one slot per section, never a per-theme
- * arrangement: the agent's prose sits on the green band, tool calls on a
- * visibly darker blue one, shell output on the black one, the user's own
+ * arrangement: answers sit on the black band, tool calls on a visibly darker
+ * blue one, shell output on the coloured one above them, the user's own
  * message on the one light (mauve) band, and the composer stays a dark surface
  * of its own. Only the hue changes between themes, so a section keeps its rank
  * and its meaning when the theme changes — `tests/theme.test.ts` measures each
@@ -82,6 +82,12 @@ export interface ThemeChrome {
   userBandFg: string;
   toolBand: string;
   shellBand: string;
+  /**
+   * Text colour for the shell band. A mid-tone band needs its own foreground,
+   * the same rule as `userBandFg`; absent means "leave the text alone", which
+   * is right for a dark band.
+   */
+  shellBandFg?: string;
   /** Composer surface (`stylePrompt`). */
   promptFg: string;
   promptBg: string;
@@ -96,16 +102,20 @@ export interface ThemeChrome {
 
 const CHROME: Record<string, ThemeChrome> = {
   // The reference, with the owner's swap: answers sit on the black band and shell
-  // output takes the green one, so the prose is the quiet part of the screen and
-  // the command output is the coloured part. Tool calls keep the darker blue
-  // band, the user's own message the light mauve one. Every other chrome theme
-  // reproduces those slots at the same lightness and only changes the hues.
+  // output takes the coloured one, so the prose is the quiet part of the screen
+  // and the command output is the coloured part. That band is the retrowave teal
+  // `#0081B0`, the lightest of the three — a *mid* tone, so it carries its own
+  // white foreground (the theme's green reads 2.7:1 on it) and the tool band
+  // stays the darker blue below it. Tool calls keep the darker blue band, the
+  // user's own message the light mauve one. Every other chrome theme reproduces
+  // those slots and only changes the hues.
   retrowave: {
     agentBand: "12;12;14",
     userBand: "200;156;255",
     userBandFg: "26;16;36",
     toolBand: "18;42;58",
-    shellBand: "24;72;52",
+    shellBand: "0;129;176",
+    shellBandFg: "255;255;255",
     promptFg: "224;222;244",
     promptBg: "22;22;30",
     statusFg: "224;222;244",
@@ -117,7 +127,8 @@ const CHROME: Record<string, ThemeChrome> = {
     userBand: "200;156;255",
     userBandFg: "26;16;36",
     toolBand: "18;42;58",
-    shellBand: "24;72;52",
+    shellBand: "0;129;176",
+    shellBandFg: "255;255;255",
     promptFg: "232;226;255",
     promptBg: "26;15;46",
     statusFg: "232;226;255",

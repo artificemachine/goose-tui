@@ -22,6 +22,7 @@ import {
   bandsEnabled,
   BLACK_BAND_GUTTER,
   shellBandBg,
+  shellBandFg,
   toolBandBg,
   TOOL_BAND_GUTTER,
 } from "./section-band";
@@ -315,10 +316,18 @@ export class ToolCallBlock implements Component {
       if (!bandsEnabled()) return margin + line;
       const kind = !this._kind || this._kind === "other" ? this.toolName().toLowerCase() : this._kind;
       const isShell = kind === "execute" || kind === "shell";
-      // Three families, so a glance separates them: shell calls take the black
-      // band, the other tool calls the blue one, and answers/thoughts the green
-      // one — a tool section never reads as an answer.
-      return bandLines([line], width, isShell ? shellBandBg() : toolBandBg(), isShell ? BLACK_BAND_GUTTER : TOOL_BAND_GUTTER)[0]!;
+      // Three families, so a glance separates them: shell calls take the teal
+      // one (the lightest of the three, so it brings its own foreground), the
+      // other tool calls the dark blue one, and answers/thoughts the black one
+      // — a tool section never reads as an answer, and a shell call never as a
+      // mere tool call.
+      return bandLines(
+        [line],
+        width,
+        isShell ? shellBandBg() : toolBandBg(),
+        isShell ? BLACK_BAND_GUTTER : TOOL_BAND_GUTTER,
+        isShell ? shellBandFg() : undefined,
+      )[0]!;
     });
   }
 
