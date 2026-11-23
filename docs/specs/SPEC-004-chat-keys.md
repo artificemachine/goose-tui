@@ -27,6 +27,14 @@ pins the separation. Promotion to `approved` is the owner's act.
 - REQ-014 -> tests/chat-keys.test.ts::dead_agent_chat_closes_on_either_key
 - INV-104 -> tests/chat-keys.test.ts::esc_never_exits_the_chat
 
+## Review notes
+
+`src/acp/chat-ui.ts` is also where the status strip and the conversation
+surface live, so it changes for reasons this spec does not govern (the status
+bar's project/branch/model chips, the frameless transcript, the recap row above
+the composer). Those are pinned by `tests/surfaces.test.ts`; when this file
+changes for one of them, only the review date moves here.
+
 ## Not covered
 
 The tests drive the input listener with the bytes a terminal sends; no real
