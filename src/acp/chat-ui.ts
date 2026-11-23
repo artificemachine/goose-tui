@@ -6,7 +6,8 @@
  * stopIdleWatchdog, attachAgentExit, shutdown.
  */
 
-import pc, { getTheme, stylePrompt } from "../theme";
+import pc, { STATUS_CHIPS, bandBackground, bandForeground, getTheme, stylePrompt, themeChrome } from "../theme";
+import { TURN_STATE } from "../herdr";
 import { journalError } from "../journal";
 import {
   Container,
@@ -23,6 +24,7 @@ import {
   VStack,
   isViewportTUI,
   matchesKey,
+  visibleWidth,
   type Component,
   type TUI,
   type TuiMouseEvent,
@@ -31,96 +33,225 @@ import {
 
 import { editorTheme } from "./chat-context";
 import { buildCommandItems, createCommandCompleter } from "./command-complete";
+import { suggestSuffix } from "./autosuggest";
+import { loadInputHistory } from "./input-history";
+import { wrapRecapLine } from "./recap";
+import { getProjectHistoryPath } from "../project";
 import { closeThought, closeToolBlocks, renderHeader, renderStatus } from "./chat-stream";
 import { showConfigMenu, showModelMenu } from "./chat-config";
 import { currentTimeouts, timeoutWarnings } from "./timeout-state";
 import { planIdleAction } from "./timeouts";
 import { abandonPendingSteers, promptInEditor, setLoader } from "./chat-io";
+import { cancelAutoRecap } from "./recap-auto";
 import { cancelAllPermissions } from "./chat-handlers";
-import type { ChatContext } from "./chat-context";
+import type { ChatContext, StatusSegment } from "./chat-context";
 
 // ─── UI assembly ─────────────────────────────────────────────────────────────
 
-export class PromptEditor extends Editor {
-  private framed = false;
-  private bottomBorder = "";
+/** The marker pi-tui closes its fake cursor with (see `render()` in editor.js). */
+const CURSOR_END = "\u001b_pi:/fc\u0007";
 
-  protected override renderTopBorder(width: number, hiddenLineCount: number): string {
-    const line = super.renderTopBorder(width, hiddenLineCount);
-    return this.framed ? pc.cyan("╭") + line + pc.cyan("╮") : line;
+/** Keep the grey suggestion inside the line: drop what does not fit. */
+function fitSuffix(text: string, room: number): string {
+  if (room <= 0) return "";
+  let fitted = "";
+  for (const char of text) {
+    if (visibleWidth(fitted + char) > room) break;
+    fitted += char;
   }
-
-  protected override renderBottomBorder(width: number, hiddenLineCount: number): string {
-    const line = super.renderBottomBorder(width, hiddenLineCount);
-    this.bottomBorder = this.framed ? pc.cyan("╰") + line + pc.cyan("╯") : line;
-    return this.bottomBorder;
-  }
-
-  override render(width: number): string[] {
-    this.framed = getTheme() === "retrowave" && width >= 4;
-    if (!this.framed) return super.render(width).map(stylePrompt);
-    return super.render(width - 2).map((line, index) =>
-      stylePrompt(index === 0 || line === this.bottomBorder ? line : pc.cyan("│") + line + pc.cyan("│")),
-    );
-  }
-
-  override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (getTheme() !== "retrowave" || event.width < 4) return super.handleMouse(event);
-    return super.handleMouse({ ...event, x: event.x - 1, width: event.width - 2 });
-  }
-}
-
-export class StatusSurface implements Component {
-  constructor(private readonly content: Component) {}
-  invalidate(): void { this.content.invalidate(); }
-  render(width: number): string[] {
-    const lines = this.content.render(width);
-    if (getTheme() !== "retrowave" || !pc.isColorSupported) return lines;
-    const foreground = "\x1b[38;2;224;222;244m";
-    const background = "\x1b[48;2;52;42;72m";
-    return lines.map((line) => foreground + background + line
-      .replace(/\x1b\[(?:2|22)m/g, "")
-      .replace(/\x1b\[(?:0|39|49)?m/g, (reset) => reset + foreground + background) + "\x1b[39m\x1b[49m");
-  }
-}
-
-export function conversationView(document: Container, rows: () => number): VStack {
-  const visible = ({ width, height }: { width: number; height: number }) =>
-    getTheme() === "retrowave" && width >= 3 && height >= 4;
-  const edge = (left: string, fill: string, right: string): Component => ({
-    invalidate() {},
-    render: (width) => [pc.cyan(left + fill.repeat(Math.max(0, width - 2)) + right)],
-  });
-  const side: Component = {
-    invalidate() {},
-    render: () => Array.from({ length: Math.max(0, rows()) }, () => pc.cyan("│")),
-  };
-  const scroll = new ScrollView(document, { follow: "end", primary: true, overscroll: "chain" });
-  return new VStack([
-    { component: edge("╭", "─", "╮"), basis: 1, visible },
-    { component: new HStack([
-      { component: side, basis: 1, visible },
-      { component: scroll, basis: 0, grow: 1, minSize: 1 },
-      { component: side, basis: 1, visible },
-    ]), basis: 0, grow: 1, minSize: 1 },
-    { component: edge("╰", "─", "╯"), basis: 1, visible },
-  ]);
+  return fitted;
 }
 
 /**
- * Build the whole renderer: terminal, transcript, composer, layout root.
+ * The composer.
  *
- * The chat renders into its own viewport (alternate screen): the transcript
- * scrolls *inside* the TUI — wheel, PgUp/PgDn, Ctrl+Shift+F search — and
- * streaming updates never drag the view back to the bottom. Only the
- * composer is pinned; the header scrolls with the conversation.
- * On exit pi-tui prints the final transcript to
- * the normal screen, so the conversation still lands in the scrollback.
+ * Beyond the retrowave frame it is also the one place that paints the inline
+ * autosuggestion: the grey remainder of the newest matching history entry, after
+ * the cursor, exactly as fish and zsh-autosuggestions show it. The decision
+ * itself is pure (`suggestSuffix` in ./autosuggest.ts) — here it only becomes
+ * pixels, because only `render(width)` knows the real column count.
  *
- * ROSSII_CHAT_MAIN_SCREEN=1 restores the inline renderer, where the terminal
- * owns the scrollback: any repaint writes at the cursor and pulls the view
- * down, so reading history during a turn is best-effort there.
+ * The source is a getter, not a copy: the chat appends to the history while it
+ * runs (`recordInput` in ./chat-io.ts), and a snapshot taken at startup would
+ * stop suggesting the prompt just sent.
  */
+export class PromptEditor extends Editor {
+  private historySource: () => readonly string[] = () => [];
+
+  /** Point the suggestion at the project's history (`chat-ui.ts` wires it). */
+  setSuggestionSource(source: () => readonly string[]): void {
+    this.historySource = source;
+  }
+
+  /**
+   * No box around the composer: two full-width rules, nothing else.
+   *
+   * pi-tui's own `renderTopBorder` / `renderBottomBorder` already draw exactly
+   * that (`"─".repeat(width)`, in `borderColor`, which is `pc.cyan` here), and
+   * the content lines come out padded to the full width — so rossii only has to
+   * stop adding what it used to: the `╭ ╮ ╰ ╯` corners and the `│` side bars.
+   * The retrowave prompt surface (`stylePrompt`: `#E0DEF4` on `#16161E`) still
+   * applies to every line, rules included.
+   */
+  override render(width: number): string[] {
+    return this.withSuggestion(super.render(width), width).map(stylePrompt);
+  }
+
+  /** True when the cursor sits at the very end of the draft. */
+  private cursorAtEnd(): boolean {
+    const { line, col } = this.getCursor();
+    const lines = this.getLines();
+    const last = lines[lines.length - 1] ?? "";
+    return line === lines.length - 1 && col >= last.length;
+  }
+
+  /**
+   * Append the grey suffix to the line that holds the cursor (the last content
+   * line, since a suggestion only exists when the cursor is at the end).
+   *
+   * The free room is measured on the *draft*, never on the rendered line: the
+   * editor pads every content line to the full width, so `visibleWidth(lines[…])`
+   * is always `width` and would leave no room at all. One column is reserved
+   * for the fake cursor the editor already drew at the end.
+   */
+  /**
+   * Take the grey suggestion (Right / End). False when there is nothing to
+   * take, so the key keeps its normal meaning — Right at the end of a line
+   * already does nothing, which is precisely why it can be the accept key.
+   */
+  acceptSuggestion(): boolean {
+    const suffix = this.currentSuffix();
+    if (suffix === null) return false;
+    this.setText(this.getText() + suffix);
+    this.tui.requestRender();
+    return true;
+  }
+
+  /** The suffix that would be painted right now, or null. */
+  private currentSuffix(): string | null {
+    return suggestSuffix(this.getText(), this.historySource(), {
+      cursorAtEnd: this.cursorAtEnd(),
+      menuOpen: this.capturesViewportInput,
+    });
+  }
+
+  private withSuggestion(lines: string[], width: number): string[] {
+    const suffix = this.currentSuffix();
+    if (suffix === null) return lines;
+    const index = lines.length - 2;
+    if (index < 0) return lines;
+    const { line, col } = this.getCursor();
+    const typed = (this.getLines()[line] ?? "").slice(0, col);
+    const room = width - this.getPaddingX() * 2 - visibleWidth(typed) - 1;
+    const fitted = fitSuffix(suffix, room);
+    if (fitted === "") return lines;
+    // The suffix goes right after the cursor block, not at the end of the padded
+    // line: the editor pads every content line to the full width, so appending
+    // would put the suggestion against the right edge. `CURSOR_END` is the marker
+    // pi-tui closes the fake cursor with; whatever follows it is the right
+    // padding, and the suggestion takes that many columns back.
+    const rendered = lines[index]!;
+    const anchor = rendered.lastIndexOf(CURSOR_END);
+    if (anchor < 0) return lines;
+    const cut = anchor + CURSOR_END.length;
+    const tail = rendered.slice(cut);
+    const ghostWidth = visibleWidth(fitted);
+    if (tail.length < ghostWidth) return lines;
+    const painted = [...lines];
+    painted[index] = rendered.slice(0, cut) + pc.dim(fitted) + tail.slice(ghostWidth);
+    return painted;
+  }
+
+}
+
+/**
+ * The status bar: a powerline strip of slanted chips, the same way `pi-bar`
+ * draws pi's footer — no background of its own (the two separator glyphs are
+ * painted as *foreground* and each chip body is closed with a full reset, so
+ * the terminal shows through the bar and between the chips), only the text
+ * colour coming from the theme: the chips are the neutral greys of
+ * `STATUS_CHIPS`, the same in every theme.
+ *
+ * `\ue0ba` (thin right arrow) draws the chip's left slash, `\ue0bc` (thin left
+ * arrow) its right one; both need a Nerd Font, and a terminal without one
+ * renders two box glyphs rather than a slant.
+ */
+const CHIP_LEADING = "\ue0ba";
+const CHIP_TRAILING = "\ue0bc";
+
+/** One chip: slash, body, slash — each part closing with a full reset. */
+export function chipSegment(chip: string, foreground: string, label: string): string {
+  return (
+    bandForeground(chip) + CHIP_LEADING + "\x1b[0m" +
+    bandBackground(chip) + foreground + ` ${label} ` + "\x1b[0m" +
+    bandForeground(chip) + CHIP_TRAILING + "\x1b[0m"
+  );
+}
+
+export class StatusSurface implements Component {
+  constructor(private readonly segments: () => readonly StatusSegment[]) {}
+  invalidate(): void {}
+  render(width: number): string[] {
+    const labels = this.segments().map((segment) => segment.label.trim()).filter((label) => label !== "");
+    if (labels.length === 0) return [""];
+    const chrome = themeChrome();
+    if (!chrome || !pc.isColorSupported) return [pc.dim(labels.join("  "))];
+    const chips = STATUS_CHIPS;
+    const text = bandForeground(chrome.statusFg);
+    const out: string[] = [];
+    let used = 0;
+    for (const [index, label] of labels.entries()) {
+      // Two separator glyphs, two spaces of padding: four columns around the text.
+      const room = width - used - 4;
+      if (room < 1) break;
+      const shown = [...label].slice(0, room).join("");
+      out.push(chipSegment(chips[index % chips.length]!, text, shown));
+      used += shown.length + 4;
+    }
+    return [out.join("")];
+  }
+}
+
+/**
+ * The recap line: `※ recap: … (disable recaps in /recap-config)`, one muted row
+ * directly above the composer — `pi-recap`'s widget placement, `aboveEditor`.
+ *
+ * It answers "where did we get to?" while the conversation keeps scrolling, so
+ * it does not live in the transcript: goose's `/recap` answer is routed here by
+ * `handleSessionUpdate` (`./recap.ts` decides what a recap looks like) and stays
+ * until the next one replaces it. Null is an empty row, so the composer never
+ * jumps when the first recap arrives.
+ *
+ * The text wraps on spaces (pi's widget does too): a recap is long — it names
+ * what happened *and* what to do next — and truncating it would hide the half
+ * that matters. The composer's block keeps its height by re-rendering, and a
+ * null line is one empty row, so nothing jumps when the first recap arrives.
+ */
+export class RecapSurface implements Component {
+  constructor(private readonly line: () => string | null) {}
+  invalidate(): void {}
+  render(width: number): string[] {
+    const line = this.line();
+    if (!line) return [""];
+    return wrapRecapLine(line, width).map((row) => pc.dim(row));
+  }
+}
+
+/**
+ * The conversation surface: the transcript, scrolled to the end.
+ *
+ * There is no frame around it. The section bands close each block, the composer
+ * draws its own rules and the status strip closes the screen, so a rounded box
+ * only bought two columns of width and two rows of height on every themed
+ * surface — and the bands read as a frame anyway.
+ */
+export function conversationView(document: Container): ScrollView {
+  return new ScrollView(document, { follow: "end", primary: true, overscroll: "chain" });
+}
+
+// ─── Agent exit & shutdown ───────────────────────────────────────────────────
+
+/** The agent may die at any moment: stop accepting prompts and say why. */
 export function setupUi(ctx: ChatContext): void {
   const terminal = new ProcessTerminal();
   const tui: TUI = ctx.altScreen ? new TuiAltScreen(terminal) : new TuiMainScreen(terminal);
@@ -131,7 +262,7 @@ export function setupUi(ctx: ChatContext): void {
   // record the child geometry `Container.handleMouse` hit-tests with — a VStack
   // here made every mouse event re-render the whole transcript.
   ctx.transcript = new Container();
-  ctx.statusLine = new Text("", 0, 0);
+  ctx.statusSegments = [];
   ctx.headerLine = new Text("", 1, 0);
 
   // In the inline renderer every repaint writes at the cursor (the last line)
@@ -154,6 +285,15 @@ export function setupUi(ctx: ChatContext): void {
   ctx.editor.setAutocompleteProvider(
     createCommandCompleter(() => buildCommandItems(ctx.gooseCommands)),
   );
+  // The shell-like history and the grey suggestion (./input-history.ts,
+  // ./autosuggest.ts): pi-tui browses ↑/↓ itself, but its list is per-instance
+  // and empty, so the project's file is replayed into it here. Recording happens
+  // in `recordInput` (./chat-io.ts) on every submit.
+  ctx.inputHistory = loadInputHistory(getProjectHistoryPath());
+  for (const entry of ctx.inputHistory.all()) ctx.editor.addToHistory(entry);
+  if (ctx.editor instanceof PromptEditor) {
+    ctx.editor.setSuggestionSource(() => ctx.inputHistory.all());
+  }
 
   if (isViewportTUI(tui)) {
     // The header scrolls with the conversation (it is just the first lines of
@@ -165,10 +305,16 @@ export function setupUi(ctx: ChatContext): void {
     document.addChild(new Spacer());
     document.addChild(ctx.transcript);
 
-    const composer = new VStack([loader, new Spacer(), ctx.editor, new StatusSurface(ctx.statusLine)]);
+    const composer = new VStack([
+      loader,
+      new Spacer(),
+      new RecapSurface(() => ctx.recapLine),
+      ctx.editor,
+      new StatusSurface(() => ctx.statusSegments),
+    ]);
     tui.setLayoutRoot(new VStack([
       {
-        component: conversationView(document, () => terminal.rows),
+        component: conversationView(document),
         basis: 0,
         grow: 1,
         minSize: 1,
@@ -181,8 +327,9 @@ export function setupUi(ctx: ChatContext): void {
     tui.addChild(ctx.transcript);
     tui.addChild(loader);
     tui.addChild(new Spacer());
+    tui.addChild(new RecapSurface(() => ctx.recapLine));
     tui.addChild(ctx.editor);
-    tui.addChild(new StatusSurface(ctx.statusLine));
+    tui.addChild(new StatusSurface(() => ctx.statusSegments));
   }
 }
 
@@ -226,6 +373,13 @@ export function attachInputListener(ctx: ChatContext): void {
         return { consume: true };
       }
       return undefined;
+    }
+    // Right / End take the grey suggestion when there is one (`/…` menu open
+    // means the editor owns those keys, see `capturesViewportInput`).
+    if (matchesKey(data, Key.right) || matchesKey(data, Key.end)) {
+      if (ctx.editor instanceof PromptEditor && ctx.editor.acceptSuggestion()) {
+        return { consume: true };
+      }
     }
     // Quick keys. Ctrl+M cannot be used for the model menu: a terminal sends
     // Enter as CR, which *is* Ctrl+M, so the binding would fire on every
@@ -373,6 +527,7 @@ export function attachAgentExit(ctx: ChatContext): void {
     if (ctx.exiting || ctx.agentDead) return;
     ctx.agentDead = true;
     ctx.busy = false;
+    ctx.herdr.report(TURN_STATE.end);
     ctx.activeRunId = null;
     setLoader(ctx, null);
     cancelAllPermissions(ctx);
@@ -393,6 +548,9 @@ export function attachAgentExit(ctx: ChatContext): void {
 export async function shutdown(ctx: ChatContext): Promise<void> {
   if (ctx.exiting) return;
   ctx.exiting = true;
+  ctx.herdr.report(TURN_STATE.shutdown);
+  // A pending automatic recap would fire into a chat that is closing.
+  cancelAutoRecap(ctx);
   // Do not leave the agent waiting for a permission answer.
   cancelAllPermissions(ctx);
   setLoader(ctx, null);

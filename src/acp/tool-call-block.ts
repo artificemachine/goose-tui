@@ -17,7 +17,14 @@
  */
 
 import pc from "../theme";
-import { bandLines, bandsEnabled, BLACK_BAND_BG, BLACK_BAND_GUTTER, TOOL_BAND_BG, TOOL_BAND_GUTTER } from "./section-band";
+import {
+  bandLines,
+  bandsEnabled,
+  BLACK_BAND_GUTTER,
+  shellBandBg,
+  toolBandBg,
+  TOOL_BAND_GUTTER,
+} from "./section-band";
 
 import {
   Markdown,
@@ -311,7 +318,7 @@ export class ToolCallBlock implements Component {
       // Three families, so a glance separates them: shell calls take the black
       // band, the other tool calls the blue one, and answers/thoughts the green
       // one — a tool section never reads as an answer.
-      return bandLines([line], width, isShell ? BLACK_BAND_BG : TOOL_BAND_BG, isShell ? BLACK_BAND_GUTTER : TOOL_BAND_GUTTER)[0]!;
+      return bandLines([line], width, isShell ? shellBandBg() : toolBandBg(), isShell ? BLACK_BAND_GUTTER : TOOL_BAND_GUTTER)[0]!;
     });
   }
 

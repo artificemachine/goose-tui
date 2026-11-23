@@ -4,8 +4,8 @@
  * Pi's TUI paints every section of a conversation with its own band: agent
  * sections (answers, thoughts, tool calls) share the green one, the user's
  * prompt gets the black one. rossii has no equivalent primitive, so this
- * component paints a child's rendered lines: a one-column gutter in the accent
- * colour plus a background that spans the transcript width.
+ * component paints a child's rendered lines: a one-column blank gutter plus a
+ * background that spans the transcript width.
  *
  * It is a wrapper rather than a change to each component so the layout stays
  * untouched — the child still renders at `width - 1`, and the wrapper only
@@ -14,23 +14,56 @@
 
 import { visibleWidth, type Component } from "@earendil-works/pi-tui";
 
-import pc, { getTheme } from "../theme";
+import pc, { bandBackground, themeChrome } from "../theme";
 
-/** Green band: agent content (answers, thoughts, tool calls that are not shell). */
-export const AGENT_BAND_BG = "\x1b[48;2;24;72;52m";
-export const AGENT_BAND_GUTTER = "\x1b[38;2;115;218;202m\u258c\x1b[39m";
+/**
+ * The gutter is a blank column, not a glyph: the section is identified by its
+ * background, so a bar would only add noise to a line the user may copy.
+ */
+export const AGENT_BAND_GUTTER = " ";
+export const BLACK_BAND_GUTTER = " ";
+export const TOOL_BAND_GUTTER = " ";
+export const USER_BAND_GUTTER = " ";
 
-/** Black band: what the user typed, and the shell. */
-export const BLACK_BAND_BG = "\x1b[48;2;12;12;14m";
-export const BLACK_BAND_GUTTER = "\x1b[38;2;150;150;158m\u258c\x1b[39m";
+/**
+ * The colours live in `themeChrome()` (`../theme.ts`), never here: each theme
+ * brings its own bands at the same lightness, so contrast does not depend on
+ * which theme is active. These four functions read the chrome at *render* time,
+ * so `/theme` takes effect on the next block without a restart.
+ *
+ * The fallbacks are what a test sees when it builds a band outside any themed
+ * chrome — the retrowave values, so the assertions stay meaningful.
+ */
+export function agentBandBg(): string {
+  return bandBackground(themeChrome()?.agentBand ?? "24;72;52");
+}
 
-/** Blue band: tool calls, so a tool section never reads as an answer. */
-export const TOOL_BAND_BG = "\x1b[48;2;18;42;58m";
-export const TOOL_BAND_GUTTER = "\x1b[38;2;125;207;255m\u258c\x1b[39m";
+/** Shell band: the rawest output on screen. */
+export function shellBandBg(): string {
+  return bandBackground(themeChrome()?.shellBand ?? "12;12;14");
+}
+
+/** Tool band: a tool call must never read as an answer. */
+export function toolBandBg(): string {
+  return bandBackground(themeChrome()?.toolBand ?? "18;42;58");
+}
+
+/**
+ * User band: the one light background in the transcript, so it needs its own
+ * foreground. Background and foreground come from the same entry, so the pair
+ * cannot drift apart.
+ */
+export function userBandBg(): string {
+  return bandBackground(themeChrome()?.userBand ?? "200;156;255");
+}
+
+export function userBandFg(): string {
+  return `\x1b[38;2;${themeChrome()?.userBandFg ?? "26;16;36"}m`;
+}
 
 /** Whether the current theme paints bands at all. */
 export function bandsEnabled(): boolean {
-  return getTheme() === "retrowave" && pc.isColorSupported;
+  return themeChrome() !== null && pc.isColorSupported;
 }
 
 /**
@@ -43,17 +76,25 @@ export function bandLines(
   width: number,
   background: string,
   gutter: string,
+  foreground?: string,
 ): string[] {
   return lines.map((line) => {
     const content = gutter + line;
     const padded = content + " ".repeat(Math.max(0, width - visibleWidth(content)));
-    return background + padded.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + background) + "\x1b[49m";
+    // A light band needs its own foreground: every reset inside the line would
+    // otherwise drop back to the transcript's near-white, which is unreadable on
+    // it. Without a foreground the behaviour is unchanged.
+    if (!foreground) {
+      return background + padded.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + background) + "\x1b[49m";
+    }
+    const painted = padded.replace(/\x1b\[(?:0|39|49)?m/g, (reset) => reset + foreground + background);
+    return foreground + background + painted + "\x1b[39m\x1b[49m";
   });
 }
 
 /**
- * A child rendered inside a band. Under any other theme this is a pass-through,
- * so the transcript keeps its plain look outside `retrowave`.
+ * A child rendered inside a band. Under a theme with no chrome this is a
+ * pass-through, so the transcript keeps its plain look.
  */
 export class SectionBand implements Component {
   private readonly child: Component;
@@ -62,7 +103,7 @@ export class SectionBand implements Component {
 
   constructor(
     child: Component,
-    background: string = AGENT_BAND_BG,
+    background: string = agentBandBg(),
     gutter: string = AGENT_BAND_GUTTER,
   ) {
     this.child = child;
@@ -78,7 +119,14 @@ export class SectionBand implements Component {
   render(width: number): string[] {
     if (!bandsEnabled()) return this.child.render(width);
     const innerWidth = Math.max(1, width - 1);
-    return bandLines(this.child.render(innerWidth), width, this.background, this.gutter);
+    const fg = themeChrome()?.agentBandFg;
+    return bandLines(
+      this.child.render(innerWidth),
+      width,
+      this.background,
+      this.gutter,
+      fg ? `\x1b[38;2;${fg}m` : undefined,
+    );
   }
 
   invalidate(): void {

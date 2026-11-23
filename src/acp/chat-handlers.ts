@@ -15,6 +15,7 @@ import {
 import { BorderBox } from "./overlay";
 import { DEFAULT_READ_LIMIT, selectListTheme } from "./chat-context";
 import type { ChatContext } from "./chat-context";
+import { TURN_STATE } from "../herdr";
 import type { RequestPermissionResponse } from "./types";
 
 // ─── Permission queue ────────────────────────────────────────────────────────
@@ -75,8 +76,13 @@ export function showNextPermission(ctx: ChatContext): void {
     ctx.tui.setFocus(ctx.editor);
     next.resolve(response);
     showNextPermission(ctx);
+    // Another prompt may have replaced the overlay; only back to work when the
+    // user is really done answering.
+    if (!ctx.activePermission) ctx.herdr.report(ctx.busy ? TURN_STATE.resumed : TURN_STATE.end);
   };
   ctx.activePermission = { finish };
+  // The session is waiting on a human: that is the red dot's whole purpose.
+  ctx.herdr.report(TURN_STATE.waiting);
   list.onSelect = (item: any) => {
     finish(item.value === "cancel"
       ? { outcome: { outcome: "cancelled" } }

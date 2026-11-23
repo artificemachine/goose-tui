@@ -23,7 +23,9 @@ import { promptInEditor, queuePrompt, submitPrompt } from "./chat-io";
 import { commandRewritesHistory, formatGooseCommandNames } from "./slash-commands";
 import { currentTimeouts, resyncTimeouts } from "./timeout-state";
 import { describeTimeout, formatDuration, parseTimeoutCommand, parseTimeoutSpec, type TimeoutKind } from "./timeouts";
-import { writeProjectTimeouts } from "../project";
+import { writeProjectRecap, writeProjectTimeouts } from "../project";
+import { describeRecapState, formatDelay, isRecapCommand, parseRecapConfigCommand } from "./recap";
+import { cancelAutoRecap, submitQuietRecap } from "./recap-auto";
 import { SearchableList } from "./overlay";
 import { mergeModelOptions, orderByUsage, orderModelMenu } from "./model-options";
 import { selectListTheme } from "./chat-context";
@@ -428,6 +430,14 @@ export function showSessionMenu(ctx: ChatContext): void {
  * cannot know about is what made `/compact` unreachable in the first place.
  */
 export function submitGooseCommand(ctx: ChatContext, text: string): void {
+  // `/recap` is goose's command, but when the recap line is on it is a gesture
+  // rather than a message: no `❯ /recap` echo, no turn rule, the answer goes to
+  // the line above the composer. With recaps off it goes through like any other
+  // goose command, echo and answer in the transcript.
+  if (isRecapCommand(text) && ctx.recapEnabled && !ctx.busy) {
+    submitQuietRecap(ctx);
+    return;
+  }
   if (commandRewritesHistory(text)) {
     // goose replaces its stored conversation and the ACP server drops
     // `AgentEvent::HistoryReplaced`, so nothing tells the client to redraw: this
@@ -471,6 +481,70 @@ async function runTimeoutCommand(ctx: ChatContext, args: readonly string[]): Pro
     return;
   }
   await changeTimeout(ctx, parsed.kind === "tool" ? "tool" : "idle", parsed.ms ?? 0);
+}
+
+/**
+ * `/recap-config [on|off|toggle]` — where a `/recap` answer lands.
+ *
+ * On (the default) routes it to the `※ recap: …` line above the composer, the
+ * way `pi-recap` draws it; off leaves it in the transcript as an ordinary
+ * answer. It never decides whether `/recap` runs: that is goose's command, and
+ * it still does (`/recap` is forwarded like every other `/…` the chat does not
+ * implement). The state is saved per directory, so it survives a restart.
+ */
+async function runRecapConfigCommand(ctx: ChatContext, args: readonly string[]): Promise<void> {
+  const parsed = parseRecapConfigCommand(args);
+  const say = (line: string) => {
+    ctx.transcript.addChild(new Text(pc.dim(line), 1, 0));
+    ctx.tui.requestRender();
+  };
+  if (parsed.kind === "error") {
+    ctx.transcript.addChild(new Text(pc.yellow(`⚠ ${parsed.message}`), 1, 0));
+    ctx.tui.requestRender();
+    return;
+  }
+  if (parsed.kind === "show") {
+    say(describeRecapState(ctx.recapEnabled, ctx.recapAuto, ctx.recapIdleMs));
+    say("/recap-config on|off|toggle · /recap-config auto on|off|toggle|30s — the line above the composer");
+    return;
+  }
+
+  switch (parsed.kind) {
+    case "set-enabled":
+    case "toggle-enabled": {
+      const enabled = parsed.kind === "toggle-enabled" ? !ctx.recapEnabled : parsed.enabled;
+      ctx.recapEnabled = enabled;
+      if (!enabled) {
+        // Switching the surface off drops what it was showing and any timer
+        // waiting to fill it: a hidden line that came back later would describe
+        // a session that has moved on.
+        ctx.recapLine = null;
+        ctx.recapMessageId = null;
+        ctx.recapText = "";
+        cancelAutoRecap(ctx);
+      }
+      writeProjectRecap({ enabled });
+      say(describeRecapState(ctx.recapEnabled, ctx.recapAuto, ctx.recapIdleMs));
+      return;
+    }
+    case "set-auto":
+    case "toggle-auto": {
+      const auto = parsed.kind === "toggle-auto" ? !ctx.recapAuto : parsed.auto;
+      ctx.recapAuto = auto;
+      if (!auto) cancelAutoRecap(ctx);
+      writeProjectRecap({ auto });
+      say(describeRecapState(ctx.recapEnabled, ctx.recapAuto, ctx.recapIdleMs));
+      return;
+    }
+    case "set-delay": {
+      ctx.recapIdleMs = parsed.ms;
+      writeProjectRecap({ idleMs: parsed.ms });
+      say(parsed.ms === 0
+        ? "Automatic: off (the delay is 0)"
+        : `Automatic: on after ${formatDelay(parsed.ms)} idle`);
+      return;
+    }
+  }
 }
 
 /** `idle 5m (env …)` / `tool 30m (project)` / `hard cap 4h (default)`. */
@@ -696,6 +770,9 @@ export async function handleCommand(ctx: ChatContext, text: string): Promise<voi
       return;
     case "tool":
       toggleAllTools(ctx, args);
+      return;
+    case "recap-config":
+      await runRecapConfigCommand(ctx, args);
       return;
     case "theme":
       runThemeCommand(ctx, args);

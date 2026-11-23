@@ -24,6 +24,7 @@ import {
 } from "./chat-extensions";
 import { closeThought, closeMessage, closeUser, resetTranscript, renderHeader, renderStatus } from "./chat-stream";
 import { resyncTimeouts } from "./timeout-state";
+import { armAutoRecap } from "./recap-auto";
 import type { ChatContext } from "./chat-context";
 import type { AcpChatOptions } from "./chat-context";
 import type { SessionSet } from "../rossii-config";
@@ -141,6 +142,11 @@ async function setupResumedSession(ctx: ChatContext, opts: AcpChatOptions): Prom
   closeUser(ctx);
   closeMessage(ctx);
   closeThought(ctx);
+  // pi's `sessionStartNeedsRecap`: a reload restores the stored line, and when
+  // work happened since that recap the next idle window regenerates it. The
+  // replay set `lastRecapTurn` when it routed the stored recap, so the ordinary
+  // timer decides — no special case here.
+  armAutoRecap(ctx);
   if (ctx.exactSet || ctx.profilePlan) {
     await reconcileSessionExtensions(ctx, ctx.sessionId);
     if (ctx.profilePlan && ctx.profilePlan.unsupported.length > 0) {
@@ -278,6 +284,9 @@ export async function changeSession(ctx: ChatContext, sessionNameOrId: string): 
     renderHeader(ctx);
     renderStatus(ctx);
     ctx.tui.requestRender();
+    // The new session's replay set `lastRecapTurn` when it routed its stored
+    // recap; anything after that earns a fresh one on the usual idle timer.
+    armAutoRecap(ctx);
   } catch (error) {
     ctx.transcript.addChild(new Text(pc.yellow(`⚠ Failed to switch session: ${String((error as Error)?.message ?? error)}`), 1, 0));
     ctx.tui.requestRender();

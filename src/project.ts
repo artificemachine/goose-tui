@@ -37,7 +37,24 @@ export interface ProjectMeta {
   worktrees?: Record<string, string>;
   /** Watchdog values set with `/timeout` in this directory; absent = inherit. */
   timeouts?: ProjectTimeouts;
+  /** `/recap-config` state; absent = recaps on. */
+  recap?: ProjectRecap;
 }
+
+/**
+ * The recap line's settings for one directory. Absent keys keep the defaults
+ * (`enabled` and `auto` on, 30 s of idle), which is what pi ships.
+ */
+export interface ProjectRecap {
+  enabled: boolean;
+  /** Generate a recap after a turn without being asked. */
+  auto: boolean;
+  /** Idle delay before that automatic recap; 0 = never. */
+  idleMs: number;
+}
+
+/** `/recap-config` defaults: on, automatic after 30 s, like `pi-recap`. */
+export const RECAP_DEFAULTS: ProjectRecap = { enabled: true, auto: true, idleMs: 30_000 };
 
 /**
  * Chat watchdogs saved for this directory. Both are optional and independent:
@@ -60,6 +77,15 @@ function getProjectKey(): string {
 
 function getProjectMetaPath(): string {
   return join(ROSSII_PROJECTS_DIR, `${getProjectKey()}.json`);
+}
+
+/**
+ * Composer input history for this directory: the same key as the meta file, so
+ * a project's history follows the project rather than the terminal.
+ * One JSON string per line (`./acp/input-history.ts`).
+ */
+export function getProjectHistoryPath(): string {
+  return join(ROSSII_PROJECTS_DIR, `${getProjectKey()}.history.jsonl`);
 }
 
 // ─── Read / Write ────────────────────────────────────────────────────────────
@@ -139,6 +165,8 @@ export function writeProjectMeta(provider: string, model: string, sessionSet?: s
     // `/timeout` writes its own key; rewriting the file without it would make
     // the setting vanish on the next wizard run.
     ...(existing?.timeouts ? { timeouts: existing.timeouts } : {}),
+    // `/recap-config` writes its own key, for the same reason.
+    ...(existing?.recap ? { recap: existing.recap } : {}),
   }, null, 2) + "\n");
 }
 
@@ -199,6 +227,63 @@ export function writeProjectTimeouts(patch: { idleMs?: number | null; toolMs?: n
   if (Object.keys(current).length > 0) meta.timeouts = current;
   else delete meta.timeouts;
 
+  writeFileSync(path, JSON.stringify(meta, null, 2) + "\n");
+}
+
+// ─── Recaps (set from the chat with `/recap-config`) ─────────────────────────
+
+/**
+ * The recap settings for this directory: **on by default**, like pi. Only an
+ * explicit value turns something off — a missing file, a file without the key,
+ * an unreadable file and a half-written object all keep the defaults.
+ */
+export function readProjectRecap(): ProjectRecap {
+  const path = getProjectMetaPath();
+  if (!existsSync(path)) return { ...RECAP_DEFAULTS };
+  try {
+    const meta = JSON.parse(readFileSync(path, "utf-8")) as ProjectMeta;
+    const saved = meta.recap;
+    if (!saved || typeof saved !== "object") return { ...RECAP_DEFAULTS };
+    return {
+      enabled: saved.enabled !== false,
+      auto: saved.auto !== false,
+      idleMs:
+        typeof saved.idleMs === "number" && Number.isFinite(saved.idleMs) && saved.idleMs >= 0
+          ? saved.idleMs
+          : RECAP_DEFAULTS.idleMs,
+    };
+  } catch {
+    return { ...RECAP_DEFAULTS };
+  }
+}
+
+/** Is the recap line on for this directory? (`/recap-config on|off`) */
+export function readProjectRecapEnabled(): boolean {
+  return readProjectRecap().enabled;
+}
+
+/**
+ * Save one facet of the recap settings, merging into the project meta.
+ *
+ * Merging rather than replacing matters: `/recap-config auto 2m` must not turn
+ * the line off, and `/recap-config off` must not forget the delay.
+ */
+export function writeProjectRecap(patch: Partial<ProjectRecap>): void {
+  const dir = ROSSII_PROJECTS_DIR;
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const path = getProjectMetaPath();
+
+  let meta: Record<string, any> = {};
+  if (existsSync(path)) {
+    try {
+      meta = JSON.parse(readFileSync(path, "utf-8"));
+    } catch {
+      meta = {};
+    }
+  }
+
+  const current: ProjectRecap = { ...RECAP_DEFAULTS, ...(meta.recap ?? {}) };
+  meta.recap = { ...current, ...patch };
   writeFileSync(path, JSON.stringify(meta, null, 2) + "\n");
 }
 

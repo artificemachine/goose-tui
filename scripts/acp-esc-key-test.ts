@@ -55,6 +55,7 @@ function makeHarness(overrides: Partial<ChatContext> = {}): Harness {
     exitHintShown: false,
     loader: { setMessage: () => {}, stop: () => {}, setText: () => {}, start: () => {} },
     permissionQueue: [],
+    herdr: { enabled: false, report: () => {} },
     ...overrides,
   } as unknown as ChatContext;
 
