@@ -84,7 +84,9 @@ toolMs: 1800000                                     # optional default for the t
 - Classic mode launches any set (and `None`) with `--no-profile`: only what the set lists is loaded
 - Chat mode has no `--no-profile` flag, but `_meta.enabledExtensions` (typed `GooseExtension[]`)
   **replaces** the profile's list, so the same semantics hold; an empty array means "no extensions"
-  (goose keeps its implicit `developer`). See the chat-mode section below
+  — measured on goose 1.60.0, a session created with `[]` reports **nothing at all**, `developer`
+  included (`docs/BUG-acp-session-extensions-20261123.md`), which is why the chat warns when a
+  session has no file/shell tools. See the chat-mode section below
 - Created/managed via the TUI: **Set → ⚙️ Create new set...** / **Manage sets...**, or manually in `~/.config/rossii/sets/`
 
 ### "None" vs "Default" vs a set
@@ -460,7 +462,8 @@ warns in the TUI and keeps the ACP default.
     `_goose/unstable/session/extensions/{list,add,remove}`, driven by `planForSet()`:
     `buildExtensionArgs` resolves the set's `extensions:` names exactly like the launcher, so
     the live list equals what a new session would get. Default switches to the profile built
-    from config.yaml, None empties the list (goose keeps its implicit `developer`). Verified
+    from config.yaml, None empties the list (on 1.60.0: nothing at all, `developer` included —
+    the chat warns about it). Verified
     live: A→B added/removed builtins, Default added `scheduler` (hidden from the config RPC),
     None removed everything, a stdio set added `echo-mcp`
   - session → `session/load`, then the current provider/model pair is re-applied and the set is

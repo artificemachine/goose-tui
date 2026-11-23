@@ -100,8 +100,10 @@ async function main(): Promise<void> {
 
   // `_meta.enabledExtensions` is the channel rossii uses to make the session set
   // exact (the chat-mode equivalent of `--no-profile`). An EMPTY array must
-  // leave only goose's implicit `developer` — anything else means the profile
-  // was loaded as well and this goose ignores the field.
+  // leave nothing but what the list names — anything else means the profile was
+  // loaded as well and this goose ignores the field. Measured on 1.60.0: an
+  // empty array starts NO extension at all, `developer` included, so the agent
+  // has no file or shell tools; see docs/BUG-acp-session-extensions-20261123.md.
   const constrained = await client.newSession({
     cwd: process.cwd(),
     mcpServers: [],
@@ -119,6 +121,9 @@ async function main(): Promise<void> {
   console.log(profileLeaked
     ? "⚠ enabledExtensions ignored by this goose — the profile loads alongside the set"
     : "✅ enabledExtensions honoured: the set is exact (no profile leak)");
+  if (enabledNames.length === 0) {
+    console.log("⚠ an empty list starts nothing — no `developer`, so no file or shell tools");
+  }
 
   // mcpServers (standard ACP field) is the fallback channel: rossii still sends
   // it, so a goose that ignores `enabledExtensions` — or a spec with inline env
