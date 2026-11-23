@@ -186,9 +186,14 @@ export async function verifySessionExtensions(ctx: ChatContext, id: string): Pro
   // a build may keep its own implicit `developer` on a resumed session while a
   // newly created one gets nothing at all.
   if (!required.has("developer") && !hasFileShellTools(present)) {
+    // `/set` is the remedy that costs nothing: it reconciles the extension list
+    // in place (add/remove over goose's extension API), so the conversation and
+    // the context survive. Verified live: a session created with `[]` gains
+    // `developer` and its tools as soon as the extension is added.
     noteExtensionWarning(ctx,
       "no file/shell tools: this session loaded no `developer` extension, so the agent cannot read files or run commands. " +
-        "Pick a set with `builtins: [developer]` (Set → Create new set…), or Default to load the profile.",
+        "Fix it here with /set → Default (or a set listing `builtins: [developer]`); the extensions switch in place. " +
+        "If the agent still reports no tools, start a new session.",
     );
   }
 }
