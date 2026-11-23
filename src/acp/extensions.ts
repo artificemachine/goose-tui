@@ -221,6 +221,23 @@ export function extensionName(extension: GooseExtension): string {
 }
 
 /**
+ * Does this extension set give the agent file and shell tools?
+ *
+ * goose's `developer` builtin is the only extension that provides them
+ * (`edit`, `read`, `shell`, `write`, …): a session without it can talk but
+ * cannot touch the repository. Verified live on goose 1.59.2 — a session created
+ * with `builtins: [developer]` exposes five such tools, one created with no
+ * extensions exposes none. Names are the plain ones from `listedExtensionName`,
+ * not the typed `builtin:developer` form.
+ */
+export function hasFileShellTools(names: Iterable<string>): boolean {
+  for (const name of names) {
+    if (name === "developer") return true;
+  }
+  return false;
+}
+
+/**
  * Shape of an entry returned by `_goose/unstable/session/extensions/list`.
  * Goose versions differ: some return `{extension, extensionKey}`, some a bare
  * extension object, and `server` is typed loosely in ./types.

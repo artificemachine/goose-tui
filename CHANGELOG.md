@@ -6,3 +6,4 @@
 - 2026-11-20: `scripts/worktree-test.ts` no longer depends on the host: its fixture ignores machine-wide Git hooks and resolves the temp directory, so `bun run test` runs to the end on macOS.
 - 2026-11-20: version 3.7.0-rc.1 (release candidate); `release.yml` publishes tags containing `-rc.` as prereleases so `rossii update` without `--pre` never picks them up.
 - 2026-11-20: `release.yml` pins its three actions to commit SHAs (ShipGuard GHA-002).
+- 2026-11-23: the chat says so when a session has no file/shell tools: a set that names no `developer` builtin (None, or one that forgot it) leaves the agent unable to read files or run commands, and until now nothing reported it. `hasFileShellTools` (pure, tested) reads the extension list goose reports — the plan cannot answer it, because a newly created session with no extensions gets nothing while a resumed one keeps goose's implicit `developer`.
